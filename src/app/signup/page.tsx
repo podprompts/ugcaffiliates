@@ -44,14 +44,28 @@ export default function SignupPage() {
     }
 
     // Set role on profile
-    if (data.user) {
-      await supabase
-        .from('profiles')
-        .update({ role, full_name: fullName })
-        .eq('id', data.user.id)
-    }
+    // Send welcome email
+if (data.user) {
+  await supabase
+    .from('profiles')
+    .update({ role, full_name: fullName })
+    .eq('id', data.user.id)
 
-    setSuccess(true)
+  // Fire welcome email
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    fetch('/api/email/welcome', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ role, full_name: fullName }),
+    }).catch(() => {}) // non-blocking
+  }
+}
+
+setSuccess(true)
     setLoading(false)
   }
 

@@ -11,6 +11,28 @@ export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
   const code = searchParams.get('code')
   const role = searchParams.get('role') // passed from Google signup
+  // Handle password reset
+const type = searchParams.get('type')
+if (type === 'recovery' && code) {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value },
+        set(name: string, value: string, options: CookieOptions) {
+          try { cookieStore.set({ name, value, ...options }) } catch {}
+        },
+        remove(name: string, options: CookieOptions) {
+          try { cookieStore.set({ name, value: '', ...options }) } catch {}
+        },
+      },
+    }
+  )
+  await supabase.auth.exchangeCodeForSession(code)
+  return NextResponse.redirect(`${origin}/reset-password`)
+}
 
   if (code) {
     const cookieStore = await cookies()
@@ -44,16 +66,16 @@ export async function GET(req: NextRequest) {
 
       // Get profile role to redirect correctly
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single()
+  .from('profiles')
+  .select('role, stripe_onboarded')
+  .eq('id', data.user.id)
+  .single()
 
       const destination = profile?.role === 'vendor'
-        ? '/vendor'
-        : profile?.role === 'admin'
-        ? '/admin'
-        : '/affiliate'
+  ? (profile?.stripe_onboarded ? '/vendor' : '/pricing')
+  : profile?.role === 'admin'
+  ? '/admin'
+  : '/affiliate'
 
       return NextResponse.redirect(`${origin}${destination}`)
     }

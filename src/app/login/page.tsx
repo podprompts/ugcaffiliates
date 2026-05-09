@@ -35,14 +35,15 @@ export default function LoginPage() {
   }
 
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', data.user.id)
-    .single()
+  .from('profiles')
+  .select('role, stripe_onboarded')
+  .eq('id', data.user.id)
+  .single()
 
-  const dest = profile?.role === 'vendor' ? '/vendor'
-    : profile?.role === 'admin' ? '/admin'
-    : '/affiliate'
+  const dest = profile?.role === 'vendor'
+  ? (profile?.stripe_onboarded ? '/vendor' : '/pricing')
+  : profile?.role === 'admin' ? '/admin'
+  : '/affiliate'
 
   await new Promise(resolve => setTimeout(resolve, 500))
   window.location.href = dest
