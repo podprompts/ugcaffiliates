@@ -1,226 +1,339 @@
-// src/app/vendor/conversions/page.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
+// src/app/vendor/conversions/page.tsx
+// Drop into your existing /vendor layout.
+// Matches your patterns: @supabase/ssr, profiles table, converted_at, approved/disputed statuses.
+
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type ConversionStatus = 'pending' | 'approved' | 'paid' | 'disputed'
+
+interface Conversion {
+  id: string
+  order_id: string
+  sale_amount: number
+  commission_rate: number
+  commission_amount: number
+  platform_fee: number
+  status: ConversionStatus
+  source: 'pixel' | 'stripe' | null
+  converted_at: string
+  affiliate_name: string | null
+  product_title: string | null
+}
+
+const STATUS_TABS: { key: ConversionStatus | 'all'; label: string }[] = [
+  { key: 'all',      label: 'All'      },
+  { key: 'pending',  label: 'Pending'  },
+  { key: 'approved', label: 'Approved' },
+  { key: 'paid',     label: 'Paid'     },
+  { key: 'disputed', label: 'Disputed' },
+]
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+
+const fmtDate = (s: string) =>
+  new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export const dynamic = 'force-dynamic'
 
 export default function VendorConversionsPage() {
   const router = useRouter()
-  const [conversions, setConversions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [marking, setMarking] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'paid'>('all')
-
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  const [conversions, setConversions] = useState<Conversion[]>([])
+  const [tab, setTab]                 = useState<ConversionStatus | 'all'>('pending')
+  const [loading, setLoading]         = useState(true)
+  const [busy, setBusy]               = useState<string | null>(null)
+  const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null)
+
+  // ── Auth guard ────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    async function load() {
+    async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
 
-      const res = await fetch('/api/me', {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      })
-      if (!res.ok) { router.push('/login'); return }
-      const { profile } = await res.json()
-      if (!profile || profile.role !== 'vendor') { router.push('/login'); return }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
 
-      const { data: c } = await supabase
-        .from('conversions')
-        .select('id, sale_amount, commission_amount, platform_fee, status, converted_at, paid_at, order_id, products(title), profiles!affiliate_id(full_name)')
-        .eq('vendor_id', session.user.id)
-        .order('converted_at', { ascending: false })
-      setConversions(c ?? [])
-      setLoading(false)
+      if (!profile || profile.role !== 'vendor') {
+        router.push('/')
+        return
+      }
+
+      fetchConversions(session.user.id)
     }
-    load()
+    checkAuth()
   }, [])
 
-  async function markAsPaid(id: string) {
-    setMarking(id)
+  // ── Fetch ─────────────────────────────────────────────────────────────────
+
+  const fetchConversions = useCallback(async (vendorId?: string) => {
+    setLoading(true)
+
+    let query = supabase
+      .from('conversions')
+      .select(`
+        id, order_id, sale_amount, commission_rate, commission_amount,
+        platform_fee, status, source, converted_at,
+        profiles!affiliate_id ( full_name ),
+        products ( title )
+      `)
+      .order('converted_at', { ascending: false })
+
+    if (vendorId) query = query.eq('vendor_id', vendorId)
+
+    const { data, error } = await query
+
+    if (!error && data) {
+      setConversions(
+        data.map((r: any) => ({
+          ...r,
+          affiliate_name: r.profiles?.full_name ?? null,
+          product_title:  r.products?.title     ?? null,
+        }))
+      )
+    }
+    setLoading(false)
+  }, [supabase])
+
+  // ── Status update ─────────────────────────────────────────────────────────
+
+  const updateStatus = async (id: string, status: ConversionStatus) => {
+    setBusy(id + status)
     const { error } = await supabase
       .from('conversions')
-      .update({ status: 'paid', paid_at: new Date().toISOString() })
+      .update({ status })
       .eq('id', id)
 
     if (!error) {
-      setConversions(prev => prev.map(c => c.id === id ? { ...c, status: 'paid', paid_at: new Date().toISOString() } : c))
+      setConversions(prev => prev.map(c => c.id === id ? { ...c, status } : c))
+      showToast(
+        status === 'approved' ? 'Sale approved — affiliate notified.' :
+        status === 'paid'     ? 'Marked as paid.'                     :
+                                'Sale disputed.',
+        true
+      )
+    } else {
+      showToast('Something went wrong.', false)
     }
-    setMarking(null)
+    setBusy(null)
   }
 
-  async function markAsApproved(id: string) {
-    setMarking(id)
-    const { error } = await supabase
-      .from('conversions')
-      .update({ status: 'approved', approved_at: new Date().toISOString() })
-      .eq('id', id)
-
-    if (!error) {
-      setConversions(prev => prev.map(c => c.id === id ? { ...c, status: 'approved', approved_at: new Date().toISOString() } : c))
-    }
-    setMarking(null)
+  const showToast = (msg: string, ok: boolean) => {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3500)
   }
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+
+  const filtered = tab === 'all' ? conversions : conversions.filter(c => c.status === tab)
+
+  const stats = {
+    pendingCount: conversions.filter(c => c.status === 'pending').length,
+    owedTotal:    conversions.filter(c => c.status === 'approved').reduce((s, c) => s + c.commission_amount, 0),
+    paidTotal:    conversions.filter(c => c.status === 'paid').reduce((s, c) => s + c.commission_amount, 0),
+    gmv:          conversions.filter(c => ['approved','paid'].includes(c.status)).reduce((s, c) => s + c.sale_amount, 0),
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f8f6' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.5rem', color: '#888' }}>Loading...</div>
     </div>
   )
 
-  const filtered = filter === 'all' ? conversions : conversions.filter(c => c.status === filter)
-
-  const totalOwed = conversions.filter(c => c.status === 'approved').reduce((s, c) => s + c.commission_amount, 0)
-  const totalPaid = conversions.filter(c => c.status === 'paid').reduce((s, c) => s + c.commission_amount, 0)
-  const totalSales = conversions.reduce((s, c) => s + c.sale_amount, 0)
-
-  const statusColor: Record<string, string> = {
-    pending: '#888', approved: '#2563eb', paid: '#16a34a', disputed: '#dc2626'
-  }
-
   return (
     <div style={{ minHeight: '100vh', background: '#f9f8f6', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
+      <style>{`
+        .vc-content  { max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem; }
+        .vc-stats    { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e8e6e2; margin-bottom: 2rem; }
+        .vc-stat     { background: #f9f8f6; padding: 1.25rem 1.5rem; }
+        .vc-tabs     { display: flex; gap: 0.25rem; border-bottom: 1px solid #e8e6e2; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .vc-tab      { background: none; border: none; border-bottom: 2px solid transparent; padding: 0.6rem 1rem; cursor: pointer; font-size: 0.875rem; color: #888; font-family: var(--font-dm-sans), sans-serif; transition: all 0.15s; }
+        .vc-tab.active { color: #1a1a1a; border-bottom-color: #b8860b; font-weight: 600; }
+        .vc-table-wrap { border: 1px solid #e8e6e2; border-radius: 8px; overflow-x: auto; }
+        .vc-table    { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .vc-th       { text-align: left; padding: 0.75rem 1rem; background: #f9f8f6; color: #888; font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e8e6e2; white-space: nowrap; }
+        .vc-tr       { border-bottom: 1px solid #f0ece6; }
+        .vc-tr:hover { background: #faf9f7; }
+        .vc-td       { padding: 0.875rem 1rem; vertical-align: middle; }
+        .vc-pill     { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.73rem; font-weight: 500; }
+        .vc-btn      { border: none; border-radius: 5px; color: #fff; padding: 0.3rem 0.75rem; font-size: 0.76rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; font-family: var(--font-dm-sans), sans-serif; }
+        .vc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .vc-actions  { display: flex; gap: 0.35rem; align-items: center; }
+        @media (max-width: 768px) {
+          .vc-content { padding: 1.25rem 1rem; }
+          .vc-stats   { grid-template-columns: repeat(2, 1fr); }
+        }
+      `}</style>
 
-      {/* Nav */}
-      <nav style={{ background: '#ffffff', borderBottom: '1px solid #e8e6e2', padding: '0 2rem', display: 'flex', alignItems: 'center', height: '60px', position: 'sticky' as const, top: 0, zIndex: 50 }}>
-        <Link href="/" style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.2rem', fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase' as const, textDecoration: 'none', color: '#0d0d0d' }}>U G C A</Link>
-        <div style={{ marginLeft: '2rem', display: 'flex', gap: '0.25rem' }}>
-          {[
-            { label: 'Dashboard',   href: '/vendor' },
-            { label: 'Products',    href: '/vendor/products' },
-            { label: 'Affiliates',  href: '/vendor/affiliates' },
-            { label: 'Conversions', href: '/vendor/conversions', active: true },
-            { label: 'Settings',    href: '/vendor/settings' },
-          ].map(n => (
-            <Link key={n.label} href={n.href} style={{ fontSize: '13px', fontWeight: 500, padding: '0.4rem 0.85rem', borderRadius: '4px', textDecoration: 'none', background: n.active ? '#f2f0ec' : 'transparent', color: n.active ? '#0d0d0d' : '#888' }}>
-              {n.label}
-            </Link>
-          ))}
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: '1.5rem', right: '1.5rem', background: toast.ok ? '#1a1a1a' : '#7f1d1d', color: '#fff', padding: '0.75rem 1.25rem', borderRadius: 8, fontSize: '0.875rem', zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+          {toast.ok ? '✓' : '✗'} {toast.msg}
         </div>
-      </nav>
+      )}
 
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '2.5rem 2rem' }}>
+      <div className="vc-content">
 
         {/* Header */}
-        <div style={{ marginBottom: '2rem' }}>
-          <div style={{ fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase' as const, color: '#888', fontWeight: 500, marginBottom: '0.4rem' }}>Vendor</div>
-          <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500 }}>Sales & conversions</h1>
+        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500, margin: 0 }}>Conversions</h1>
+            <p style={{ color: '#888', fontSize: '0.875rem', marginTop: 4 }}>Review, approve, and pay your affiliates.</p>
+          </div>
+          <button
+            onClick={() => fetchConversions()}
+            style={{ background: 'transparent', border: '1px solid #d4b896', borderRadius: 6, padding: '0.4rem 0.9rem', cursor: 'pointer', fontSize: '0.85rem', color: '#b8860b' }}
+          >
+            ↻ Refresh
+          </button>
         </div>
 
-        {/* Summary */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: '#e8e6e2', marginBottom: '2rem' }}>
+        {/* Stats */}
+        <div className="vc-stats">
           {[
-            { label: 'Total sales revenue', value: `$${totalSales.toFixed(2)}`, sub: `${conversions.length} total conversions` },
-            { label: 'Commissions owed',    value: `$${totalOwed.toFixed(2)}`,  sub: 'Approved — pay these affiliates' },
-            { label: 'Commissions paid',    value: `$${totalPaid.toFixed(2)}`,  sub: 'Already paid out' },
+            { label: 'Pending Approval',  value: String(stats.pendingCount), color: '#b8860b' },
+            { label: 'Commissions Owed',  value: fmt(stats.owedTotal),       color: '#c0392b' },
+            { label: 'Commissions Paid',  value: fmt(stats.paidTotal),       color: '#27ae60' },
+            { label: 'Confirmed GMV',     value: fmt(stats.gmv),             color: '#1a1a1a' },
           ].map(s => (
-            <div key={s.label} style={{ background: '#ffffff', padding: '1.25rem 1rem' }}>
-              <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#888', marginBottom: '0.5rem' }}>{s.label}</div>
-              <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 600, color: '#0d0d0d', lineHeight: 1, marginBottom: '0.3rem' }}>{s.value}</div>
-              <div style={{ fontSize: '11px', color: '#888' }}>{s.sub}</div>
+            <div key={s.label} className="vc-stat" style={{ borderTop: `3px solid ${s.color}` }}>
+              <div style={{ fontSize: '1.6rem', fontFamily: 'var(--font-cormorant), serif', fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* How to pay notice */}
-        {totalOwed > 0 && (
-          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1.25rem 1.5rem', marginBottom: '2rem', display: 'flex', gap: '1rem' }}>
-            <div style={{ fontSize: '13px', color: '#1e40af', lineHeight: 1.65 }}>
-              <strong>You owe ${totalOwed.toFixed(2)} in affiliate commissions.</strong> Pay affiliates directly via PayPal, Venmo, bank transfer, or any agreed method. Then click "Mark as paid" on each conversion below to update their dashboard.
-            </div>
-          </div>
-        )}
-
-        {/* Filter tabs */}
-        <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem' }}>
-          {(['all', 'pending', 'approved', 'paid'] as const).map(f => (
+        {/* Tabs */}
+        <div className="vc-tabs">
+          {STATUS_TABS.map(t => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                fontSize: '12.5px', fontWeight: 500, padding: '0.4rem 0.85rem',
-                borderRadius: '4px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                background: filter === f ? '#0d0d0d' : '#ffffff',
-                color: filter === f ? '#ffffff' : '#888',
-                textTransform: 'capitalize' as const,
-              }}
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`vc-tab${tab === t.key ? ' active' : ''}`}
             >
-              {f} {f === 'all' ? `(${conversions.length})` : `(${conversions.filter(c => c.status === f).length})`}
+              {t.label}
+              {t.key === 'pending' && stats.pendingCount > 0 && (
+                <span style={{ background: '#b8860b', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: '0.68rem', marginLeft: 6 }}>
+                  {stats.pendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {/* Conversions table */}
-        <div style={{ background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px' }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center' as const }}>
-              <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.25rem', color: '#888', marginBottom: '0.5rem' }}>No conversions yet</div>
-              <p style={{ fontSize: '13px', color: '#888' }}>Sales will appear here once affiliates start driving conversions.</p>
-            </div>
-          ) : (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1.5fr', padding: '0.75rem 1.5rem', borderBottom: '1px solid #e8e6e2', background: '#f9f8f6' }}>
-                {['Product / Affiliate', 'Order ID', 'Sale', 'Commission', 'Status', 'Action'].map(h => (
-                  <div key={h} style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#888' }}>{h}</div>
+        {/* Table */}
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#999', padding: '3rem', fontSize: '0.9rem' }}>
+            No {tab === 'all' ? '' : tab} conversions yet.
+          </div>
+        ) : (
+          <div className="vc-table-wrap">
+            <table className="vc-table">
+              <thead>
+                <tr>
+                  {['Product', 'Affiliate', 'Sale', 'Commission', 'Source', 'Date', 'Status', 'Actions'].map(h => (
+                    <th key={h} className="vc-th">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(c => (
+                  <tr key={c.id} className="vc-tr">
+                    <td className="vc-td" style={{ fontWeight: 500 }}>{c.product_title ?? '—'}</td>
+                    <td className="vc-td" style={{ color: '#555' }}>{c.affiliate_name ?? '—'}</td>
+                    <td className="vc-td" style={{ fontFamily: 'monospace' }}>{fmt(c.sale_amount)}</td>
+                    <td className="vc-td" style={{ fontFamily: 'monospace', color: '#27ae60', fontWeight: 600 }}>{fmt(c.commission_amount)}</td>
+                    <td className="vc-td">
+                      <span className="vc-pill" style={sourceStyle(c.source)}>
+                        {c.source === 'stripe' ? '⚡ Stripe' : c.source === 'pixel' ? '◎ Pixel' : '—'}
+                      </span>
+                    </td>
+                    <td className="vc-td" style={{ whiteSpace: 'nowrap', color: '#666', fontSize: '0.82rem' }}>{fmtDate(c.converted_at)}</td>
+                    <td className="vc-td">
+                      <span className="vc-pill" style={statusStyle(c.status)}>
+                        {c.status.charAt(0).toUpperCase() + c.status.slice(1)}
+                      </span>
+                    </td>
+                    <td className="vc-td">
+                      <div className="vc-actions">
+                        {c.status === 'pending' && (
+                          <>
+                            <button
+                              className="vc-btn"
+                              style={{ background: '#27ae60' }}
+                              disabled={busy === c.id + 'approved'}
+                              onClick={() => updateStatus(c.id, 'approved')}
+                            >
+                              {busy === c.id + 'approved' ? '…' : 'Approve'}
+                            </button>
+                            <button
+                              className="vc-btn"
+                              style={{ background: '#888' }}
+                              disabled={busy === c.id + 'disputed'}
+                              onClick={() => updateStatus(c.id, 'disputed')}
+                            >
+                              {busy === c.id + 'disputed' ? '…' : 'Dispute'}
+                            </button>
+                          </>
+                        )}
+                        {c.status === 'approved' && (
+                          <button
+                            className="vc-btn"
+                            style={{ background: '#b8860b' }}
+                            disabled={busy === c.id + 'paid'}
+                            onClick={() => updateStatus(c.id, 'paid')}
+                          >
+                            {busy === c.id + 'paid' ? '…' : 'Mark Paid'}
+                          </button>
+                        )}
+                        {(c.status === 'paid' || c.status === 'disputed') && (
+                          <span style={{ color: '#ccc', fontSize: '0.85rem' }}>—</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-              {filtered.map(c => {
-                const product   = c.products as any
-                const affiliate = c.profiles as any
-                const date = new Date(c.converted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                const isMarking = marking === c.id
-
-                return (
-                  <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1.5fr', padding: '1rem 1.5rem', borderBottom: '1px solid #e8e6e2', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{product?.title ?? '—'}</div>
-                      <div style={{ fontSize: '11px', color: '#888', marginTop: '0.15rem' }}>{affiliate?.full_name ?? '—'} · {date}</div>
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#888', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.order_id?.substring(0, 12) ?? '—'}</div>
-                    <div style={{ fontSize: '13px', fontWeight: 500 }}>${c.sale_amount.toFixed(2)}</div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#0d0d0d' }}>${c.commission_amount.toFixed(2)}</div>
-                    <div>
-                      <span style={{ fontSize: '12px', color: statusColor[c.status] ?? '#888', fontWeight: 500, textTransform: 'capitalize' as const }}>{c.status}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      {c.status === 'pending' && (
-                        <button
-                          onClick={() => markAsApproved(c.id)}
-                          disabled={isMarking}
-                          style={{ fontSize: '11.5px', fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.3rem 0.65rem', borderRadius: '3px', cursor: isMarking ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: isMarking ? 0.6 : 1 }}
-                        >
-                          Approve
-                        </button>
-                      )}
-                      {c.status === 'approved' && (
-                        <button
-                          onClick={() => markAsPaid(c.id)}
-                          disabled={isMarking}
-                          style={{ fontSize: '11.5px', fontWeight: 600, color: '#ffffff', background: isMarking ? '#888' : '#16a34a', border: 'none', padding: '0.3rem 0.65rem', borderRadius: '3px', cursor: isMarking ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                        >
-                          {isMarking ? '...' : 'Mark as paid'}
-                        </button>
-                      )}
-                      {c.status === 'paid' && (
-                        <span style={{ fontSize: '11.5px', color: '#16a34a', fontWeight: 500 }}>
-                          Paid {c.paid_at ? new Date(c.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </>
-          )}
-        </div>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+// ─── Style helpers ────────────────────────────────────────────────────────────
+
+function statusStyle(status: ConversionStatus): React.CSSProperties {
+  const map: Record<ConversionStatus, React.CSSProperties> = {
+    pending:  { background: '#fff8e1', color: '#f57f17' },
+    approved: { background: '#e8f5e9', color: '#2e7d32' },
+    disputed: { background: '#fce4ec', color: '#b71c1c' },
+    paid:     { background: '#e8eaf6', color: '#283593' },
+  }
+  return map[status]
+}
+
+function sourceStyle(source: string | null): React.CSSProperties {
+  if (source === 'stripe') return { background: '#e8f5e9', color: '#2e7d32' }
+  if (source === 'pixel')  return { background: '#fff8e1', color: '#f57f17' }
+  return { background: '#f0f0f0', color: '#888' }
 }

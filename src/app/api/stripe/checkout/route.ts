@@ -5,10 +5,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase-server'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia' as any,
-})
-
 const PRICE_IDS: Record<string, string> = {
   starter: process.env.STRIPE_STARTER_PRICE_ID!,
   growth:  process.env.STRIPE_GROWTH_PRICE_ID!,
@@ -16,6 +12,10 @@ const PRICE_IDS: Record<string, string> = {
 }
 
 export async function POST(req: NextRequest) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2026-04-22.dahlia' as any,
+  })
+
   try {
     const authHeader = req.headers.get('authorization')
     const token = authHeader?.replace('Bearer ', '')
@@ -31,7 +31,6 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!
 
-    // Get or create Stripe customer
     const { data: profile } = await supabase
       .from('profiles')
       .select('stripe_customer_id, full_name')
@@ -54,7 +53,6 @@ export async function POST(req: NextRequest) {
         .eq('id', user.id)
     }
 
-    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
