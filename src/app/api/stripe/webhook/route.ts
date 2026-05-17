@@ -1,5 +1,9 @@
 // src/app/api/stripe/webhook/route.ts
-// Handles Stripe webhook events for subscription lifecycle + affiliate conversion tracking
+// Handles Stripe webhook events
+// ── SUBSCRIPTION BILLING COMMENTED OUT ────────────────────────────────────────
+// Vendors now list for free. Subscription model preserved here for future
+// premium tier. Only conversion/platform fee tracking is active.
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
@@ -28,28 +32,32 @@ export async function POST(req: NextRequest) {
 
     case 'checkout.session.completed': {
       const session = event.data.object as any
-      const userId  = session.metadata?.supabase_user_id
-      const plan    = session.metadata?.plan
 
-      // ── Existing: vendor subscription onboarding ───────────────────────────
-      if (userId && plan) {
-        await supabase
-          .from('profiles')
-          .update({
-            stripe_customer_id: session.customer as string,
-            stripe_onboarded:   true,
-          })
-          .eq('id', userId)
+      // ── SUBSCRIPTION ONBOARDING — COMMENTED OUT ─────────────────────────────
+      // Vendors are now free to list. Re-enable when premium tier is launched.
+      //
+      // const userId = session.metadata?.supabase_user_id
+      // const plan   = session.metadata?.plan
+      //
+      // if (userId && plan) {
+      //   await supabase
+      //     .from('profiles')
+      //     .update({
+      //       stripe_customer_id: session.customer as string,
+      //       stripe_onboarded:   true,
+      //     })
+      //     .eq('id', userId)
+      //
+      //   await supabase
+      //     .from('profiles')
+      //     .update({ role: 'vendor' })
+      //     .eq('id', userId)
+      //
+      //   console.log(`[webhook] vendor ${userId} subscribed to ${plan}`)
+      // }
+      // ── END COMMENTED OUT ────────────────────────────────────────────────────
 
-        await supabase
-          .from('profiles')
-          .update({ role: 'vendor' })
-          .eq('id', userId)
-
-        console.log(`[webhook] vendor ${userId} subscribed to ${plan}`)
-      }
-
-      // ── New: affiliate conversion attribution ──────────────────────────────
+      // ── Affiliate conversion attribution — ACTIVE ─────────────────────────
       // ref comes from client_reference_id (UGCA-hosted links)
       // or metadata.ugca_ref (vendor's own Stripe checkout)
       const ref = session.client_reference_id || session.metadata?.ugca_ref || null
@@ -59,7 +67,6 @@ export async function POST(req: NextRequest) {
         const amountTotal = (session.amount_total ?? 0) / 100
 
         if (amountTotal > 0) {
-          // Deduplicate — never double-count the same Stripe session
           const { data: existing } = await supabase
             .from('conversions')
             .select('id')
@@ -89,7 +96,7 @@ export async function POST(req: NextRequest) {
                 commission_rate:       link.commission_rate,
                 commission_amount:     commissionAmount,
                 platform_fee:          platformFee,
-                status:                'approved', // Stripe-confirmed → skip pending
+                status:                'approved',
                 source:                'stripe',
                 stripe_session_id:     session.id,
                 stripe_payment_intent: session.payment_intent ?? null,
@@ -102,7 +109,7 @@ export async function POST(req: NextRequest) {
               })
 
               console.log(
-                `[webhook] affiliate conversion — order: ${orderId} | commission: $${commissionAmount}`
+                `[webhook] affiliate conversion — order: ${orderId} | commission: $${commissionAmount} | platform fee: $${platformFee}`
               )
             } else {
               console.warn(`[webhook] affiliate ref not found: ${ref}`)
@@ -114,19 +121,21 @@ export async function POST(req: NextRequest) {
       break
     }
 
-    case 'customer.subscription.deleted': {
-      const sub    = event.data.object as any
-      const userId = sub.metadata?.supabase_user_id
-      if (!userId) break
-
-      await supabase
-        .from('profiles')
-        .update({ stripe_onboarded: false })
-        .eq('id', userId)
-
-      console.log(`[webhook] subscription cancelled for ${userId}`)
-      break
-    }
+    // ── SUBSCRIPTION LIFECYCLE — COMMENTED OUT ─────────────────────────────
+    // Re-enable when premium vendor tier is launched.
+    //
+    // case 'customer.subscription.deleted': {
+    //   const sub    = event.data.object as any
+    //   const userId = sub.metadata?.supabase_user_id
+    //   if (!userId) break
+    //   await supabase
+    //     .from('profiles')
+    //     .update({ stripe_onboarded: false })
+    //     .eq('id', userId)
+    //   console.log(`[webhook] subscription cancelled for ${userId}`)
+    //   break
+    // }
+    // ── END COMMENTED OUT ────────────────────────────────────────────────────
 
     default:
       break

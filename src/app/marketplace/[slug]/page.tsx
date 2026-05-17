@@ -200,7 +200,7 @@ export default function ProductDetailPage() {
           </div>
 
           {(product.video_url || embedUrl) && (
-            <div style={{ width: '100%', aspectRatio: '16/9', borderRadius: '6px', overflow: 'hidden', marginBottom: '1rem', background: '#0d0d0d' }}>
+            <div style={{ width: '100%', aspectRatio: product.video_aspect_ratio ?? '16/9', borderRadius: '6px', overflow: 'hidden', marginBottom: '1rem', background: '#0d0d0d' }}>
               {product.video_url ? (
                 <video controls playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} poster={images[0] ?? undefined}>
                   <source src={product.video_url} type="video/mp4" />

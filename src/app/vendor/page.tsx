@@ -1,4 +1,5 @@
 // src/app/vendor/page.tsx
+// Vendor dashboard — no subscription gate, role-based access only
 'use client'
 
 import { Suspense } from 'react'
@@ -37,7 +38,14 @@ function VendorDashboard() {
       const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${session.access_token}` } })
       if (!res.ok) { router.push('/login'); return }
       const { profile: prof } = await res.json()
-      if (!prof || prof.role !== 'vendor') { router.push('/login?redirected=1'); return }
+
+      // ── Gate: must be a vendor role ──────────────────────────────────────
+      // stripe_onboarded check removed — listing is now free.
+      // Role is set to 'vendor' on vendor signup automatically.
+      if (!prof || prof.role !== 'vendor') {
+        router.push('/login?redirected=1')
+        return
+      }
       setProfile(prof)
 
       const { data: prodIds } = await supabase.from('products').select('id').eq('vendor_id', session.user.id)
@@ -45,7 +53,7 @@ function VendorDashboard() {
 
       const [{ data: prods }, { data: convs }, { data: apps }] = await Promise.all([
         supabase.from('products').select('id, title, status, commission_rate, total_conversions, total_revenue').eq('vendor_id', session.user.id).order('created_at', { ascending: false }).limit(5),
-        supabase.from('conversions').select('id, sale_amount, commission_amount, status, converted_at, profiles!affiliate_id(full_name), products(title)').eq('vendor_id', session.user.id).order('converted_at', { ascending: false }).limit(8),
+        supabase.from('conversions').select('id, sale_amount, commission_amount, platform_fee, status, converted_at, profiles!affiliate_id(full_name), products(title)').eq('vendor_id', session.user.id).order('converted_at', { ascending: false }).limit(8),
         ids.length > 0
           ? supabase.from('affiliate_applications').select('id, applied_at, profiles!affiliate_id(full_name), products(title)').eq('status', 'pending').in('product_id', ids).order('applied_at', { ascending: false }).limit(5)
           : Promise.resolve({ data: [] }),
@@ -57,10 +65,10 @@ function VendorDashboard() {
 
       const allConvs = convs ?? []
       setStats({
-        revenue: allConvs.reduce((s, c) => s + c.sale_amount, 0),
-        sales: allConvs.length,
+        revenue:  allConvs.reduce((s, c) => s + c.sale_amount, 0),
+        sales:    allConvs.length,
         products: (prods ?? []).filter((p: any) => p.status === 'active').length,
-        pending: (apps ?? []).length,
+        pending:  (apps ?? []).length,
       })
 
       setLoading(false)
@@ -107,9 +115,14 @@ function VendorDashboard() {
         <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888', fontWeight: 500, marginBottom: '0.3rem' }}>Vendor Dashboard</div>
-            <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500 }}>Welcome back, {profile?.full_name?.split(' ')[0] ?? 'Vendor'}</h1>
+            <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500 }}>Welcome back, {profile?.business_name ?? profile?.full_name?.split(' ')[0] ?? 'Vendor'}</h1>
           </div>
           <Link href="/vendor/products/new" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', border: '1px solid #d0cdc8', padding: '0.5rem 1.25rem', borderRadius: '3px', textDecoration: 'none', whiteSpace: 'nowrap' }}>+ List a new product</Link>
+        </div>
+
+        {/* Platform fee notice */}
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', fontSize: '13px', color: '#16a34a' }}>
+          ✓ Free to list · 4% platform fee on confirmed affiliate sales only
         </div>
 
         <div className="v-stat-grid">
@@ -192,9 +205,9 @@ function VendorDashboard() {
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: '500px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '0.5rem 0', borderBottom: '1px solid #e8e6e2', marginBottom: '0.25rem' }}>
-                  {['Product / Affiliate', 'Sale', 'Commission', 'Status'].map(h => (
+              <div style={{ minWidth: '560px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', padding: '0.5rem 0', borderBottom: '1px solid #e8e6e2', marginBottom: '0.25rem' }}>
+                  {['Product / Affiliate', 'Sale', 'Commission', 'Platform Fee', 'Status'].map(h => (
                     <div key={h} style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#888' }}>{h}</div>
                   ))}
                 </div>
@@ -202,13 +215,14 @@ function VendorDashboard() {
                   const product = c.products as any
                   const affiliate = c.profiles as any
                   return (
-                    <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '0.75rem 0', borderBottom: '1px solid #f2f0ec', alignItems: 'center' }}>
+                    <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', padding: '0.75rem 0', borderBottom: '1px solid #f2f0ec', alignItems: 'center' }}>
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product?.title ?? '—'}</div>
                         <div style={{ fontSize: '11px', color: '#888' }}>{affiliate?.full_name ?? '—'}</div>
                       </div>
                       <div style={{ fontSize: '13px' }}>${c.sale_amount.toFixed(2)}</div>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>${c.commission_amount.toFixed(2)}</div>
+                      <div style={{ fontSize: '13px', color: '#888' }}>${(c.platform_fee ?? 0).toFixed(2)}</div>
                       <div style={{ fontSize: '12px', fontWeight: 500, textTransform: 'capitalize', color: c.status === 'paid' ? '#16a34a' : c.status === 'approved' ? '#2563eb' : '#888' }}>{c.status}</div>
                     </div>
                   )

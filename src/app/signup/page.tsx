@@ -97,7 +97,7 @@ export default function SignupPage() {
             <div style={{ textAlign: 'center' as const, marginBottom: '2rem' }}>
               <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2.25rem', fontWeight: 500, marginBottom: '0.4rem' }}>Create your account</h1>
               <p style={{ fontSize: '13.5px', color: '#888' }}>
-                {role === 'vendor' ? 'Start your 7-day free trial. Cancel anytime.' : 'Free to join. No monthly fees.'}
+                {role === 'vendor' ? 'Free to list. We only take 4% on confirmed sales.' : 'Free to join. No monthly fees.'}
               </p>
             </div>
 
