@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
               const commissionAmount = parseFloat(
                 (amountTotal * (link.commission_rate / 100)).toFixed(2)
               )
-              const platformFee = parseFloat((amountTotal * 0.04).toFixed(2))
+              const platformFee = parseFloat((amountTotal * 0.10).toFixed(2))
 
               await supabase.from('conversions').insert({
                 affiliate_link_id:     link.id,

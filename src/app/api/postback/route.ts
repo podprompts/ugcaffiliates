@@ -56,7 +56,7 @@ async function handlePostback(req: NextRequest) {
     return json({ error: 'Invalid secret' }, 401)
   }
 
-  const platformFeeRate = parseFloat(rulesMap['platform_fee_rate'] ?? '0.04')
+  const platformFeeRate = parseFloat(rulesMap['platform_fee_rate'] ?? '0.10')
 
   // 3. Resolve tracking code → link + product
   const { data: link, error: linkError } = await supabase

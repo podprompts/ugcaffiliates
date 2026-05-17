@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     // ── Calculate commission ───────────────────────────────────────────────
     const commissionRate   = product.commission_rate
     const commissionAmount = Math.round(amount * commissionRate * 100) / 100
-    const platformFee      = Math.round(amount * 0.04 * 100) / 100
+    const platformFee      = Math.round(amount * 0.10 * 100) / 100
 
     // ── Hash IP for fraud detection ────────────────────────────────────────
     const forwarded = req.headers.get('x-forwarded-for')
