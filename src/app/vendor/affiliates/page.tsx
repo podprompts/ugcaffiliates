@@ -15,6 +15,8 @@ export default function VendorAffiliatesPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [actioning, setActioning] = useState<string | null>(null)
+  const [actionError, setActionError] = useState('')
+  const [session, setSession] = useState<any>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,14 +30,20 @@ export default function VendorAffiliatesPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.push('/login'); return }
-      const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      const { data: { session: sess } } = await supabase.auth.getSession()
+      if (!sess) { router.push('/login'); return }
+      setSession(sess)
+
+      const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${sess.access_token}` } })
       const { profile } = await res.json()
       if (!profile || profile.role !== 'vendor') { router.push('/login'); return }
       setProfileInitial(profile.full_name?.charAt(0)?.toUpperCase() ?? 'V')
 
-      const { data: products } = await supabase.from('products').select('id').eq('vendor_id', session.user.id)
+      const { data: products } = await supabase
+        .from('products')
+        .select('id')
+        .eq('vendor_id', sess.user.id)
+
       const productIds = (products ?? []).map((p: any) => p.id)
       if (productIds.length === 0) { setLoading(false); return }
 
@@ -44,16 +52,40 @@ export default function VendorAffiliatesPage() {
         .select('id, status, applied_at, reviewed_at, message, profiles!affiliate_id(id, full_name), products(id, title, commission_rate)')
         .in('product_id', productIds)
         .order('applied_at', { ascending: false })
+
       setApplications(data ?? [])
       setLoading(false)
     }
     load()
   }, [])
 
-  async function handleAction(id: string, status: 'approved' | 'rejected') {
+  // ── Calls the API route which creates the affiliate link on approval ────────
+  async function handleAction(id: string, action: 'approved' | 'rejected') {
+    if (!session) return
     setActioning(id)
-    await supabase.from('affiliate_applications').update({ status, reviewed_at: new Date().toISOString() }).eq('id', id)
-    setApplications(prev => prev.map(a => a.id === id ? { ...a, status, reviewed_at: new Date().toISOString() } : a))
+    setActionError('')
+
+    const res = await fetch('/api/affiliate/approve', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ application_id: id, action }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok || !data.ok) {
+      setActionError(data.error ?? 'Failed to update application. Please try again.')
+      setActioning(null)
+      return
+    }
+
+    // Update local state optimistically
+    setApplications(prev =>
+      prev.map(a => a.id === id ? { ...a, status: action, reviewed_at: new Date().toISOString() } : a)
+    )
     setActioning(null)
   }
 
@@ -92,6 +124,12 @@ export default function VendorAffiliatesPage() {
           <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500 }}>Affiliates</h1>
         </div>
 
+        {actionError && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', fontSize: '13px', color: '#dc2626' }}>
+            {actionError}
+          </div>
+        )}
+
         <div className="va-filter-bar">
           {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{ fontSize: '12.5px', fontWeight: 500, padding: '0.4rem 0.85rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: filter === f ? '#0d0d0d' : '#ffffff', color: filter === f ? '#ffffff' : '#888', textTransform: 'capitalize' }}>
@@ -119,27 +157,70 @@ export default function VendorAffiliatesPage() {
                   const product = a.products as any
                   const date = new Date(a.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                   const isActioning = actioning === a.id
+
                   return (
                     <div key={a.id} className="va-table-row">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f2f0ec', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, flexShrink: 0 }}>{affiliate?.full_name?.charAt(0)?.toUpperCase() ?? '?'}</div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{affiliate?.full_name ?? 'Unknown'}</div>
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f2f0ec', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, flexShrink: 0 }}>
+                          {affiliate?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {affiliate?.full_name ?? 'Unknown'}
+                        </div>
                       </div>
+
                       <div>
                         <div style={{ fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product?.title ?? '—'}</div>
-                        <div style={{ fontSize: '11px', color: '#888' }}>{product ? `${(product.commission_rate * 100).toFixed(0)}% commission` : ''}</div>
+                        <div style={{ fontSize: '11px', color: '#888' }}>
+                          {product ? `${(product.commission_rate * 100).toFixed(0)}% commission` : ''}
+                        </div>
                       </div>
+
                       <div style={{ fontSize: '12px', color: '#888' }}>{date}</div>
-                      <div><span style={{ fontSize: '12px', color: statusColor[a.status], fontWeight: 500, textTransform: 'capitalize' }}>{a.status}</span></div>
+
+                      <div>
+                        <span style={{ fontSize: '12px', color: statusColor[a.status], fontWeight: 500, textTransform: 'capitalize' }}>
+                          {a.status}
+                        </span>
+                      </div>
+
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                         {a.status === 'pending' && (
                           <>
-                            <button onClick={() => handleAction(a.id, 'approved')} disabled={isActioning} style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', border: 'none', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>Approve</button>
-                            <button onClick={() => handleAction(a.id, 'rejected')} disabled={isActioning} style={{ fontSize: '12px', color: '#888', background: 'none', border: '1px solid #e8e6e2', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                            <button
+                              onClick={() => handleAction(a.id, 'approved')}
+                              disabled={isActioning}
+                              style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', background: isActioning ? '#888' : '#0d0d0d', border: 'none', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                            >
+                              {isActioning ? '…' : 'Approve'}
+                            </button>
+                            <button
+                              onClick={() => handleAction(a.id, 'rejected')}
+                              disabled={isActioning}
+                              style={{ fontSize: '12px', color: '#888', background: 'none', border: '1px solid #e8e6e2', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                            >
+                              Decline
+                            </button>
                           </>
                         )}
-                        {a.status === 'approved' && <button onClick={() => handleAction(a.id, 'rejected')} disabled={isActioning} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: '1px solid #fecaca', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>Revoke</button>}
-                        {a.status === 'rejected' && <button onClick={() => handleAction(a.id, 'approved')} disabled={isActioning} style={{ fontSize: '12px', color: '#16a34a', background: 'none', border: '1px solid #bbf7d0', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>Re-approve</button>}
+                        {a.status === 'approved' && (
+                          <button
+                            onClick={() => handleAction(a.id, 'rejected')}
+                            disabled={isActioning}
+                            style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: '1px solid #fecaca', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                          >
+                            {isActioning ? '…' : 'Revoke'}
+                          </button>
+                        )}
+                        {a.status === 'rejected' && (
+                          <button
+                            onClick={() => handleAction(a.id, 'approved')}
+                            disabled={isActioning}
+                            style={{ fontSize: '12px', color: '#16a34a', background: 'none', border: '1px solid #bbf7d0', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                          >
+                            {isActioning ? '…' : 'Re-approve'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
