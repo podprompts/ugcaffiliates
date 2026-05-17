@@ -115,8 +115,8 @@ export default async function HomePage() {
 
       {/* ANNOUNCE BAR — remove when live */}
       <div className="announce" style={{ background: '#f9f8f6', borderBottom: '1px solid #e8e6e2', textAlign: 'center', padding: '0.55rem 1rem', fontSize: '12.5px', color: '#3a3a3a' }}>
-        Now in beta — join early and get 3 months free on any plan.{' '}
-        <Link href="/signup" style={{ color: '#0d0d0d', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '2px' }}>Sign up free</Link>
+        Now in beta, no applications will be fulfilled — Sign up to be notified.{' '}
+        <Link href="/signup" style={{ color: '#0d0d0d', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '2px' }}>Sign up here</Link>
       </div>
 
       <Navbar />

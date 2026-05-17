@@ -21,24 +21,35 @@ export default function NewProductPage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [error, setError] = useState('')
   const [aiAssets, setAiAssets] = useState<any>(null)
-  const [uploadingImages, setUploadingImages] = useState(false)
-  const [productImages, setProductImages] = useState<string[]>([])
-  const [isPro, setIsPro] = useState(false)
   const [profileInitial, setProfileInitial] = useState('V')
 
-  // Promo video upload state
+  // Image upload state
+  const [uploadingImages, setUploadingImages] = useState(false)
+  const [productImages, setProductImages] = useState<string[]>([])
+  const [imageUploadProgress, setImageUploadProgress] = useState('')
+
+  // Video upload state
   const [promoVideoUploading, setPromoVideoUploading] = useState(false)
-  const [promoVideoUrl, setPromoVideoUrl] = useState<string>('')
-  const [promoVideoName, setPromoVideoName] = useState<string>('')
+  const [promoVideoUrl, setPromoVideoUrl] = useState('')
+  const [promoVideoName, setPromoVideoName] = useState('')
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const promoVideoRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
-    title: '', description: '', product_url: '', price: '',
-    commission_rate: '', category: '', brand_guidelines: '',
-    prohibited_terms: '', cookie_days: '30', auto_approve: false,
-    video_url: '', video_embed_url: '',
+    title: '',
+    description: '',
+    product_url: '',
+    price: '',
+    commission_rate: '',
+    category: '',
+    brand_guidelines: '',
+    prohibited_terms: '',
+    cookie_days: '30',
+    auto_approve: false,
+    video_url: '',
+    video_embed_url: '',
   })
 
   const supabase = createBrowserClient(
@@ -51,95 +62,152 @@ export default function NewProductPage() {
     window.location.href = '/'
   }
 
-  // Check plan on mount
   useState(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return
       fetch('/api/me', { headers: { Authorization: `Bearer ${session.access_token}` } })
         .then(r => r.json())
         .then(({ profile }) => {
-          setIsPro(!!profile?.stripe_onboarded)
           setProfileInitial(profile?.full_name?.charAt(0)?.toUpperCase() ?? 'V')
         })
     })
   })
 
-  function set(key: string, value: any) {
+  function setField(key: string, value: any) {
     setForm(prev => ({ ...prev, [key]: value }))
   }
 
+  // ── Product URL — auto-prepend https:// ───────────────────────────────────
+  function handleProductUrlBlur(e: React.FocusEvent<HTMLInputElement>) {
+    let val = e.target.value.trim()
+    if (!val) return
+    if (!/^https?:\/\//i.test(val)) {
+      val = `https://${val}`
+      setField('product_url', val)
+    }
+  }
+
+  function handleProductUrlChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setField('product_url', e.target.value)
+    if (error.includes('https://')) setError('')
+  }
+
+  // ── Image upload → R2 ────────────────────────────────────────────────────
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
-    if (productImages.length + files.length > 10) { setError('Maximum 10 images allowed'); return }
+    if (productImages.length + files.length > 10) {
+      setError('Maximum 10 images allowed')
+      return
+    }
+
     setUploadingImages(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-
-    const uploaded: string[] = []
-    for (const file of files) {
-      const ext = file.name.split('.').pop()
-      const path = `products/${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, { contentType: file.type })
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-        uploaded.push(publicUrl)
-      }
-    }
-    setProductImages(prev => [...prev, ...uploaded])
-    setUploadingImages(false)
-  }
-
-  // ── Promo video upload ────────────────────────────────────────────────────
-  async function handlePromoVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const maxSize = 500 * 1024 * 1024 // 500MB
-    if (file.size > maxSize) {
-      setError('Video file too large. Maximum size is 500MB.')
-      return
-    }
-
-    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/mov']
-    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(mp4|mov|webm|qt)$/i)) {
-      setError('Please upload an MP4, MOV, or WebM video file.')
-      return
-    }
-
-    setPromoVideoUploading(true)
     setError('')
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const ext = file.name.split('.').pop()
-    const path = `promo-videos/${session.user.id}/${Date.now()}.${ext}`
-    const { error: uploadError } = await supabase.storage
-      .from('product-images')
-      .upload(path, file, { contentType: file.type })
+    const uploaded: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      setImageUploadProgress(`Uploading image ${i + 1} of ${files.length}…`)
 
-    if (uploadError) {
-      setError(`Video upload failed: ${uploadError.message}`)
-      setPromoVideoUploading(false)
-      return
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'image')
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (res.ok && data.url) {
+        uploaded.push(data.url)
+      } else {
+        setError(data.error ?? 'Failed to upload image')
+      }
     }
 
-    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-    setPromoVideoUrl(publicUrl)
-    setPromoVideoName(file.name)
-    set('video_url', publicUrl)
-    setPromoVideoUploading(false)
+    setProductImages(prev => [...prev, ...uploaded])
+    setImageUploadProgress('')
+    setUploadingImages(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  function removePromoVideo() {
-    setPromoVideoUrl('')
-    setPromoVideoName('')
-    set('video_url', '')
+  // ── Video upload → R2 ────────────────────────────────────────────────────
+  async function handlePromoVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setPromoVideoUploading(true)
+    setVideoUploadProgress(0)
+    setError('')
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+
+    // Use XMLHttpRequest for upload progress tracking
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', 'video')
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const pct = Math.round((event.loaded / event.total) * 100)
+            setVideoUploadProgress(pct)
+          }
+        }
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const data = JSON.parse(xhr.responseText)
+            if (data.url) {
+              setPromoVideoUrl(data.url)
+              setPromoVideoName(file.name)
+              setField('video_url', data.url)
+              resolve()
+            } else {
+              reject(new Error(data.error ?? 'Upload failed'))
+            }
+          } else {
+            try {
+              const data = JSON.parse(xhr.responseText)
+              reject(new Error(data.error ?? `Upload failed (${xhr.status})`))
+            } catch {
+              reject(new Error(`Upload failed (${xhr.status})`))
+            }
+          }
+        }
+
+        xhr.onerror = () => reject(new Error('Network error during upload'))
+
+        xhr.open('POST', '/api/upload')
+        xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`)
+        xhr.send(formData)
+      })
+    } catch (err: any) {
+      setError(err.message ?? 'Video upload failed')
+    }
+
+    setPromoVideoUploading(false)
+    setVideoUploadProgress(0)
     if (promoVideoRef.current) promoVideoRef.current.value = ''
   }
 
   function removeImage(index: number) {
     setProductImages(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function removePromoVideo() {
+    setPromoVideoUrl('')
+    setPromoVideoName('')
+    setField('video_url', '')
+    if (promoVideoRef.current) promoVideoRef.current.value = ''
   }
 
   async function generateAIAssets() {
@@ -149,30 +217,50 @@ export default function NewProductPage() {
       const res = await fetch('/api/ai/generate-assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: form.title, description: form.description, category: form.category, commission_rate: form.commission_rate, price: form.price }),
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description,
+          category: form.category,
+          commission_rate: form.commission_rate,
+          price: form.price,
+        }),
       })
       const data = await res.json()
       if (data.assets) setAiAssets(data.assets)
       else setError('Failed to generate assets. Try again.')
-    } catch { setError('Failed to generate assets.') }
+    } catch {
+      setError('Failed to generate assets.')
+    }
     setAiLoading(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true); setError('')
+    setError('')
+
+    // Validate product URL has https://
+    if (form.product_url && !/^https?:\/\//i.test(form.product_url)) {
+      setError('Product URL must start with https:// — please add it before the domain name.')
+      return
+    }
+
+    setLoading(true)
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.push('/login'); return }
 
     const slug = form.title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').substring(0, 60) + '-' + Date.now()
     const commissionRate = parseFloat(form.commission_rate) / 100
+
     if (isNaN(commissionRate) || commissionRate < 0.05 || commissionRate > 0.70) {
-      setError('Commission rate must be between 5% and 70%'); setLoading(false); return
+      setError('Commission rate must be between 5% and 70%')
+      setLoading(false)
+      return
     }
 
     const { error: insertError } = await supabase.from('products').insert({
       vendor_id: session.user.id,
-      title: form.title, slug,
+      title: form.title,
+      slug,
       description: form.description,
       product_url: form.product_url,
       price: parseFloat(form.price),
@@ -194,9 +282,25 @@ export default function NewProductPage() {
     router.push('/vendor/products')
   }
 
-  const inputStyle = { width: '100%', padding: '0.7rem 1rem', border: '1px solid #e8e6e2', borderRadius: '3px', fontSize: '14px', fontFamily: 'inherit', color: '#0d0d0d', background: '#ffffff', outline: 'none', boxSizing: 'border-box' as const }
-  const labelStyle = { display: 'block' as const, fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#3a3a3a', marginBottom: '0.4rem' }
-  const sectionStyle = { background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.75rem', marginBottom: '1.25rem' }
+  const inputStyle = {
+    width: '100%', padding: '0.7rem 1rem', border: '1px solid #e8e6e2',
+    borderRadius: '3px', fontSize: '14px', fontFamily: 'inherit',
+    color: '#0d0d0d', background: '#ffffff', outline: 'none',
+    boxSizing: 'border-box' as const,
+  }
+  const labelStyle = {
+    display: 'block' as const, fontSize: '12px', fontWeight: 600,
+    letterSpacing: '0.06em', textTransform: 'uppercase' as const,
+    color: '#3a3a3a', marginBottom: '0.4rem',
+  }
+  const sectionStyle = {
+    background: '#ffffff', border: '1px solid #e8e6e2',
+    borderRadius: '4px', padding: '1.75rem', marginBottom: '1.25rem',
+  }
+  const sectionLabel = {
+    fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase' as const,
+    color: '#888', fontWeight: 600, marginBottom: '1.25rem',
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f9f8f6', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
@@ -205,6 +309,10 @@ export default function NewProductPage() {
         .np-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         .np-three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
         .np-img-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+        .upload-drop-zone { border: 2px dashed #d0cdc8; border-radius: 6px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+        .upload-drop-zone:hover { border-color: #0d0d0d; background: #f9f8f6; }
+        .progress-bar { height: 4px; background: #e8e6e2; border-radius: 2px; overflow: hidden; margin-top: 0.75rem; }
+        .progress-fill { height: 100%; background: #0d0d0d; border-radius: 2px; transition: width 0.2s ease; }
         @media (max-width: 768px) {
           .np-content { padding: 1.5rem 1rem; }
           .np-two-col { grid-template-columns: 1fr; }
@@ -235,28 +343,44 @@ export default function NewProductPage() {
 
           {/* ── Product basics ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Product details</div>
+            <div style={sectionLabel}>Product details</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={labelStyle}>Product name *</label>
-                <input style={inputStyle} value={form.title} onChange={e => set('title', e.target.value)} required placeholder="e.g. Premium Skincare Serum" />
+                <input style={inputStyle} value={form.title} onChange={e => setField('title', e.target.value)} required placeholder="e.g. Premium Skincare Serum" />
               </div>
               <div>
                 <label style={labelStyle}>Description *</label>
-                <textarea style={{ ...inputStyle, minHeight: '100px', resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} required placeholder="Describe your product — benefits, ingredients, what makes it unique..." />
+                <textarea style={{ ...inputStyle, minHeight: '100px', resize: 'vertical' }} value={form.description} onChange={e => setField('description', e.target.value)} required placeholder="Describe your product — benefits, ingredients, what makes it unique…" />
               </div>
               <div>
                 <label style={labelStyle}>Product URL *</label>
-                <input style={inputStyle} type="url" value={form.product_url} onChange={e => set('product_url', e.target.value)} required placeholder="https://yourstore.com/product" />
+                <input
+                  style={{
+                    ...inputStyle,
+                    borderColor: form.product_url && !/^https?:\/\//i.test(form.product_url) ? '#f87171' : '#e8e6e2',
+                  }}
+                  type="text"
+                  value={form.product_url}
+                  onChange={handleProductUrlChange}
+                  onBlur={handleProductUrlBlur}
+                  required
+                  placeholder="https://yourstore.com/product"
+                />
+                {form.product_url && !/^https?:\/\//i.test(form.product_url) && (
+                  <p style={{ fontSize: '12px', color: '#f87171', marginTop: '0.35rem' }}>
+                    ⚠️ URL must start with <strong>https://</strong> — it will be added automatically when you click away.
+                  </p>
+                )}
               </div>
               <div className="np-two-col">
                 <div>
                   <label style={labelStyle}>Price ($) *</label>
-                  <input style={inputStyle} type="number" min="0" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} required placeholder="49.99" />
+                  <input style={inputStyle} type="number" min="0" step="0.01" value={form.price} onChange={e => setField('price', e.target.value)} required placeholder="49.99" />
                 </div>
                 <div>
                   <label style={labelStyle}>Category</label>
-                  <select style={inputStyle} value={form.category} onChange={e => set('category', e.target.value)}>
+                  <select style={inputStyle} value={form.category} onChange={e => setField('category', e.target.value)}>
                     <option value="">Select a category</option>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -267,21 +391,21 @@ export default function NewProductPage() {
 
           {/* ── Commission & settings ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Commission & settings</div>
+            <div style={sectionLabel}>Commission & settings</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div className="np-three-col">
                 <div>
                   <label style={labelStyle}>Commission rate (%) *</label>
-                  <input style={inputStyle} type="number" min="5" max="70" step="1" value={form.commission_rate} onChange={e => set('commission_rate', e.target.value)} required placeholder="20" />
+                  <input style={inputStyle} type="number" min="5" max="70" step="1" value={form.commission_rate} onChange={e => setField('commission_rate', e.target.value)} required placeholder="20" />
                   <div style={{ fontSize: '11px', color: '#888', marginTop: '0.35rem' }}>5% – 70%</div>
                 </div>
                 <div>
                   <label style={labelStyle}>Cookie window (days)</label>
-                  <input style={inputStyle} type="number" min="1" max="90" value={form.cookie_days} onChange={e => set('cookie_days', e.target.value)} />
+                  <input style={inputStyle} type="number" min="1" max="90" value={form.cookie_days} onChange={e => setField('cookie_days', e.target.value)} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.1rem' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={form.auto_approve} onChange={e => set('auto_approve', e.target.checked)} />
+                    <input type="checkbox" checked={form.auto_approve} onChange={e => setField('auto_approve', e.target.checked)} />
                     <span style={{ fontSize: '13px', color: '#3a3a3a' }}>Auto-approve affiliates</span>
                   </label>
                 </div>
@@ -291,7 +415,11 @@ export default function NewProductPage() {
 
           {/* ── Product images ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Product images</div>
+            <div style={sectionLabel}>Product images</div>
+            <p style={{ fontSize: '13px', color: '#888', margin: '0 0 1rem' }}>
+              Upload high-resolution product images — 1080p and above supported. JPG, PNG, WebP up to 50MB each.
+            </p>
+
             {productImages.length > 0 && (
               <div className="np-img-grid">
                 {productImages.map((url, i) => (
@@ -303,63 +431,97 @@ export default function NewProductPage() {
                 ))}
               </div>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingImages || productImages.length >= 10} style={{ fontSize: '13px', color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.6rem 1.25rem', borderRadius: '3px', background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', opacity: productImages.length >= 10 ? 0.5 : 1 }}>
-              {uploadingImages ? 'Uploading…' : `+ Add images (${productImages.length}/10)`}
+
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/heic" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingImages || productImages.length >= 10}
+              style={{ fontSize: '13px', color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.6rem 1.25rem', borderRadius: '3px', background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', opacity: productImages.length >= 10 ? 0.5 : 1 }}
+            >
+              {uploadingImages ? imageUploadProgress || 'Uploading…' : `+ Add images (${productImages.length}/10)`}
             </button>
           </div>
 
-          {/* ── Promo video upload ── */}
+          {/* ── Promo video ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '0.5rem' }}>Promo video</div>
+            <div style={sectionLabel}>Promo video</div>
             <p style={{ fontSize: '13px', color: '#888', margin: '0 0 1.25rem' }}>
-              Upload a promo video for affiliates to use when promoting your product. MP4, MOV, or WebM — up to 500MB.
+              Upload a promo video for affiliates to download and use when promoting your product. Stored on Cloudflare R2 — MP4, MOV, or WebM up to <strong>2GB</strong>.
             </p>
 
             {promoVideoUrl ? (
-              <div style={{ border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+              <div style={{ border: '1px solid #d1fae5', background: '#f0fdf4', borderRadius: '4px', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div style={{ width: '40px', height: '40px', background: '#f2f2f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#888" strokeWidth={1.5}>
+                  <div style={{ width: '40px', height: '40px', background: '#dcfce7', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
                     </svg>
                   </div>
                   <div>
                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>{promoVideoName}</div>
-                    <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px' }}>✓ Uploaded successfully</div>
+                    <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px' }}>✓ Uploaded to Cloudflare R2</div>
                   </div>
                 </div>
-                <button type="button" onClick={removePromoVideo} style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px', fontFamily: 'inherit' }}>
+                <button type="button" onClick={removePromoVideo} style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px', fontFamily: 'inherit', flexShrink: 0 }}>
                   Remove
                 </button>
               </div>
             ) : (
               <div>
-                <input ref={promoVideoRef} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={handlePromoVideoUpload} style={{ display: 'none' }} />
-                <button type="button" onClick={() => promoVideoRef.current?.click()} disabled={promoVideoUploading} style={{ fontSize: '13px', color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.6rem 1.25rem', borderRadius: '3px', background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', opacity: promoVideoUploading ? 0.6 : 1 }}>
-                  {promoVideoUploading ? 'Uploading video…' : '+ Upload promo video'}
-                </button>
+                <input
+                  ref={promoVideoRef}
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
+                  onChange={handlePromoVideoUpload}
+                  style={{ display: 'none' }}
+                />
+                <div
+                  className="upload-drop-zone"
+                  onClick={() => !promoVideoUploading && promoVideoRef.current?.click()}
+                  style={{ opacity: promoVideoUploading ? 0.7 : 1 }}
+                >
+                  <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#aaa" strokeWidth={1.5} style={{ margin: '0 auto 0.75rem' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                  </svg>
+                  {promoVideoUploading ? (
+                    <div>
+                      <div style={{ fontSize: '13px', color: '#3a3a3a', marginBottom: '0.5rem' }}>
+                        Uploading to Cloudflare R2… {videoUploadProgress}%
+                      </div>
+                      <div className="progress-bar">
+                        <div className="progress-fill" style={{ width: `${videoUploadProgress}%` }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#3a3a3a', marginBottom: '0.25rem' }}>Click to upload promo video</div>
+                      <div style={{ fontSize: '12px', color: '#888' }}>MP4, MOV, WebM — up to 2GB</div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* Optional embed URL fallback */}
+            {/* Embed URL fallback */}
             <div style={{ marginTop: '1rem' }}>
               <label style={{ ...labelStyle, color: '#aaa' }}>Or paste a video embed URL (YouTube, Vimeo, etc.)</label>
-              <input style={{ ...inputStyle, color: '#888' }} type="url" value={form.video_embed_url} onChange={e => set('video_embed_url', e.target.value)} placeholder="https://youtube.com/embed/..." />
+              <input style={{ ...inputStyle, color: '#888' }} type="url" value={form.video_embed_url} onChange={e => setField('video_embed_url', e.target.value)} placeholder="https://youtube.com/embed/…" />
             </div>
           </div>
 
           {/* ── Brand guidelines ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Brand guidelines <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
+            <div style={sectionLabel}>Brand guidelines <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={labelStyle}>Brand guidelines</label>
-                <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} value={form.brand_guidelines} onChange={e => set('brand_guidelines', e.target.value)} placeholder="How should affiliates represent your brand? Tone, messaging, dos and don'ts..." />
+                <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} value={form.brand_guidelines} onChange={e => setField('brand_guidelines', e.target.value)} placeholder="Tone, messaging, dos and don'ts for affiliates…" />
               </div>
               <div>
                 <label style={labelStyle}>Prohibited terms</label>
-                <input style={inputStyle} value={form.prohibited_terms} onChange={e => set('prohibited_terms', e.target.value)} placeholder="e.g. cure, guaranteed, free — words affiliates must not use" />
+                <input style={inputStyle} value={form.prohibited_terms} onChange={e => setField('prohibited_terms', e.target.value)} placeholder="e.g. cure, guaranteed, free — words affiliates must not use" />
               </div>
             </div>
           </div>
@@ -368,8 +530,8 @@ export default function NewProductPage() {
           <div style={sectionStyle}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
-                <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600 }}>AI affiliate assets</div>
-                <div style={{ fontSize: '12px', color: '#aaa', marginTop: '0.25rem' }}>TikTok hooks, IG captions, email swipes & YouTube scripts for your affiliates</div>
+                <div style={sectionLabel}>AI affiliate assets</div>
+                <div style={{ fontSize: '12px', color: '#aaa', marginTop: '-0.75rem' }}>TikTok hooks, IG captions, email swipes & YouTube scripts for your affiliates</div>
               </div>
               <button type="button" onClick={generateAIAssets} disabled={aiLoading} style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.6rem 1.25rem', borderRadius: '3px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: aiLoading ? 0.6 : 1, whiteSpace: 'nowrap' }}>
                 {aiLoading ? 'Generating…' : aiAssets ? 'Regenerate' : 'Generate assets'}
