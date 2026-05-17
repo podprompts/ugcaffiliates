@@ -1,5 +1,6 @@
 // src/app/api/stripe/checkout/route.ts
 // Creates a Stripe Checkout session for vendor subscriptions
+// Trial period: 7 days for Starter and Growth only — Pro has no trial
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
@@ -9,6 +10,13 @@ const PRICE_IDS: Record<string, string> = {
   starter: process.env.STRIPE_STARTER_PRICE_ID!,
   growth:  process.env.STRIPE_GROWTH_PRICE_ID!,
   pro:     process.env.STRIPE_PRO_PRICE_ID!,
+}
+
+// Only starter and growth get a free trial
+const TRIAL_DAYS: Record<string, number> = {
+  starter: 7,
+  growth:  7,
+  pro:     0,  // No trial for Pro
 }
 
 export async function POST(req: NextRequest) {
@@ -30,6 +38,7 @@ export async function POST(req: NextRequest) {
     if (!priceId) return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!
+    const trialDays = TRIAL_DAYS[plan] ?? 0
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -59,7 +68,8 @@ export async function POST(req: NextRequest) {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
-        trial_period_days: 7,
+        // Only include trial_period_days if > 0
+        ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
         metadata: {
           supabase_user_id: user.id,
           plan,

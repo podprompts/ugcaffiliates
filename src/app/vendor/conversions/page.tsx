@@ -1,14 +1,13 @@
 'use client'
 
 // src/app/vendor/conversions/page.tsx
-// Drop into your existing /vendor layout.
-// Matches your patterns: @supabase/ssr, profiles table, converted_at, approved/disputed statuses.
+// FIX: VendorNav now properly wired with profileInitial + handleSignOut
+// so the hamburger menu works on mobile
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import VendorNav from '@/components/VendorNav'
 
 type ConversionStatus = 'pending' | 'approved' | 'paid' | 'disputed'
 
@@ -40,12 +39,10 @@ const fmt = (n: number) =>
 const fmtDate = (s: string) =>
   new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export const dynamic = 'force-dynamic'
 
 export default function VendorConversionsPage() {
-  const router = useRouter()
+  const router   = useRouter()
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -56,17 +53,23 @@ export default function VendorConversionsPage() {
   const [loading, setLoading]         = useState(true)
   const [busy, setBusy]               = useState<string | null>(null)
   const [toast, setToast]             = useState<{ msg: string; ok: boolean } | null>(null)
+  const [profileInitial, setProfileInitial] = useState('V')
 
-  // ── Auth guard ────────────────────────────────────────────────────────────
+  // ── Sign out ────────────────────────────────────────────────────────────
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
 
+  // ── Auth guard + fetch ───────────────────────────────────────────────────
   useEffect(() => {
-    async function checkAuth() {
+    async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, full_name')
         .eq('id', session.user.id)
         .single()
 
@@ -75,13 +78,13 @@ export default function VendorConversionsPage() {
         return
       }
 
+      setProfileInitial(profile.full_name?.charAt(0)?.toUpperCase() ?? 'V')
       fetchConversions(session.user.id)
     }
-    checkAuth()
+    init()
   }, [])
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
-
+  // ── Fetch conversions ────────────────────────────────────────────────────
   const fetchConversions = useCallback(async (vendorId?: string) => {
     setLoading(true)
 
@@ -111,8 +114,7 @@ export default function VendorConversionsPage() {
     setLoading(false)
   }, [supabase])
 
-  // ── Status update ─────────────────────────────────────────────────────────
-
+  // ── Status update ────────────────────────────────────────────────────────
   const updateStatus = async (id: string, status: ConversionStatus) => {
     setBusy(id + status)
     const { error } = await supabase
@@ -139,8 +141,7 @@ export default function VendorConversionsPage() {
     setTimeout(() => setToast(null), 3500)
   }
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-
+  // ── Derived ──────────────────────────────────────────────────────────────
   const filtered = tab === 'all' ? conversions : conversions.filter(c => c.status === tab)
 
   const stats = {
@@ -149,8 +150,6 @@ export default function VendorConversionsPage() {
     paidTotal:    conversions.filter(c => c.status === 'paid').reduce((s, c) => s + c.commission_amount, 0),
     gmv:          conversions.filter(c => ['approved','paid'].includes(c.status)).reduce((s, c) => s + c.sale_amount, 0),
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -190,6 +189,9 @@ export default function VendorConversionsPage() {
         </div>
       )}
 
+      {/* VendorNav — now properly wired, hamburger works on mobile */}
+      <VendorNav profileInitial={profileInitial} onSignOut={handleSignOut} />
+
       <div className="vc-content">
 
         {/* Header */}
@@ -209,10 +211,10 @@ export default function VendorConversionsPage() {
         {/* Stats */}
         <div className="vc-stats">
           {[
-            { label: 'Pending Approval',  value: String(stats.pendingCount), color: '#b8860b' },
-            { label: 'Commissions Owed',  value: fmt(stats.owedTotal),       color: '#c0392b' },
-            { label: 'Commissions Paid',  value: fmt(stats.paidTotal),       color: '#27ae60' },
-            { label: 'Confirmed GMV',     value: fmt(stats.gmv),             color: '#1a1a1a' },
+            { label: 'Pending Approval',       value: String(stats.pendingCount), color: '#b8860b' },
+            { label: 'Commissions Owed',        value: fmt(stats.owedTotal),       color: '#c0392b' },
+            { label: 'Commissions Paid',        value: fmt(stats.paidTotal),       color: '#27ae60' },
+            { label: 'Confirmed GMV',           value: fmt(stats.gmv),             color: '#1a1a1a' },
           ].map(s => (
             <div key={s.label} className="vc-stat" style={{ borderTop: `3px solid ${s.color}` }}>
               <div style={{ fontSize: '1.6rem', fontFamily: 'var(--font-cormorant), serif', fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
@@ -276,31 +278,16 @@ export default function VendorConversionsPage() {
                       <div className="vc-actions">
                         {c.status === 'pending' && (
                           <>
-                            <button
-                              className="vc-btn"
-                              style={{ background: '#27ae60' }}
-                              disabled={busy === c.id + 'approved'}
-                              onClick={() => updateStatus(c.id, 'approved')}
-                            >
+                            <button className="vc-btn" style={{ background: '#27ae60' }} disabled={busy === c.id + 'approved'} onClick={() => updateStatus(c.id, 'approved')}>
                               {busy === c.id + 'approved' ? '…' : 'Approve'}
                             </button>
-                            <button
-                              className="vc-btn"
-                              style={{ background: '#888' }}
-                              disabled={busy === c.id + 'disputed'}
-                              onClick={() => updateStatus(c.id, 'disputed')}
-                            >
+                            <button className="vc-btn" style={{ background: '#888' }} disabled={busy === c.id + 'disputed'} onClick={() => updateStatus(c.id, 'disputed')}>
                               {busy === c.id + 'disputed' ? '…' : 'Dispute'}
                             </button>
                           </>
                         )}
                         {c.status === 'approved' && (
-                          <button
-                            className="vc-btn"
-                            style={{ background: '#b8860b' }}
-                            disabled={busy === c.id + 'paid'}
-                            onClick={() => updateStatus(c.id, 'paid')}
-                          >
+                          <button className="vc-btn" style={{ background: '#b8860b' }} disabled={busy === c.id + 'paid'} onClick={() => updateStatus(c.id, 'paid')}>
                             {busy === c.id + 'paid' ? '…' : 'Mark Paid'}
                           </button>
                         )}
@@ -319,8 +306,6 @@ export default function VendorConversionsPage() {
     </div>
   )
 }
-
-// ─── Style helpers ────────────────────────────────────────────────────────────
 
 function statusStyle(status: ConversionStatus): React.CSSProperties {
   const map: Record<ConversionStatus, React.CSSProperties> = {

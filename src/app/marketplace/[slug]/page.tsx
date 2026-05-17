@@ -1,4 +1,7 @@
 // src/app/marketplace/[slug]/page.tsx
+// CHANGE: ApplyCard now gates non-logged-in users with a Sign Up prompt
+// instead of letting them click Apply and showing "Applied - pending approval"
+
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
@@ -8,14 +11,13 @@ import { createBrowserClient } from '@supabase/ssr'
 
 export const dynamic = 'force-dynamic'
 
-// Deterministic trend score seeded from product id (stable per product, random-feeling 5–10)
 function getTrendScore(id: string): number {
   let hash = 0
   for (let i = 0; i < id.length; i++) {
     hash = ((hash << 5) - hash) + id.charCodeAt(i)
     hash |= 0
   }
-  return 5 + (Math.abs(hash) % 6) // 5–10
+  return 5 + (Math.abs(hash) % 6)
 }
 
 export default function ProductDetailPage() {
@@ -66,7 +68,6 @@ export default function ProductDetailPage() {
     load()
   }, [params.slug])
 
-  // Animate trend bar on load
   useEffect(() => {
     if (!product) return
     const score = getTrendScore(product.id)
@@ -79,8 +80,8 @@ export default function ProductDetailPage() {
     function onKey(e: KeyboardEvent) {
       const images = product?.images ?? []
       if (e.key === 'ArrowRight') setLightboxIndex(i => i !== null ? Math.min(i + 1, images.length - 1) : null)
-      if (e.key === 'ArrowLeft') setLightboxIndex(i => i !== null ? Math.max(i - 1, 0) : null)
-      if (e.key === 'Escape') setLightboxIndex(null)
+      if (e.key === 'ArrowLeft')  setLightboxIndex(i => i !== null ? Math.max(i - 1, 0) : null)
+      if (e.key === 'Escape')     setLightboxIndex(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -90,22 +91,20 @@ export default function ProductDetailPage() {
     if (!user) { window.location.href = '/signup'; return }
     setApplying(true)
 
-    // Insert application
     await supabase.from('affiliate_applications').insert({
-      product_id: product.id,
+      product_id:   product.id,
       affiliate_id: user.id,
     })
 
-    // Notify the vendor via notifications table
     const vendor = product.profiles as any
     if (vendor?.id) {
       await supabase.from('notifications').insert({
-        user_id: vendor.id,
-        type: 'affiliate_application',
-        title: 'New affiliate application',
-        message: `Someone applied to promote "${product.title}". Review them in your Affiliates dashboard.`,
+        user_id:    vendor.id,
+        type:       'affiliate_application',
+        title:      'New affiliate application',
+        message:    `Someone applied to promote "${product.title}". Review them in your Affiliates dashboard.`,
         product_id: product.id,
-        read: false,
+        read:       false,
       })
     }
 
@@ -114,13 +113,10 @@ export default function ProductDetailPage() {
     setApplying(false)
   }
 
-  // Normalize YouTube/Vimeo embed URL
   function normalizeEmbedUrl(url: string): string {
     if (!url) return ''
-    // Convert watch URLs to embed
     const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
     if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`
-    // Already an embed URL — return as-is
     return url
   }
 
@@ -132,22 +128,21 @@ export default function ProductDetailPage() {
 
   if (!product) return null
 
-  const vendor = product.profiles as any
-  const commPct = (product.commission_rate * 100).toFixed(0)
-  const earn = (product.price * product.commission_rate).toFixed(2)
-  const aiAssets = product.ai_assets
+  const vendor    = product.profiles as any
+  const commPct   = (product.commission_rate * 100).toFixed(0)
+  const earn      = (product.price * product.commission_rate).toFixed(2)
+  const aiAssets  = product.ai_assets
   const images: string[] = product.images ?? (product.image_url ? [product.image_url] : [])
   const trendScore = getTrendScore(product.id)
-  const trendPct = ((trendScore - 5) / 5) * 100 // 0% at score 5, 100% at score 10
+  const trendPct   = ((trendScore - 5) / 5) * 100
   const trendColor = trendScore >= 9 ? '#16a34a' : trendScore >= 7 ? '#2563eb' : '#888'
-
-  const embedUrl = normalizeEmbedUrl(product.video_embed_url ?? '')
+  const embedUrl   = normalizeEmbedUrl(product.video_embed_url ?? '')
 
   const assetTabs = [
-    { key: 'tiktok', label: 'TikTok Hook', content: aiAssets?.tiktok_hook },
-    { key: 'ig', label: 'IG Caption', content: aiAssets?.ig_caption },
-    { key: 'email', label: 'Email Swipe', content: aiAssets?.email_swipe },
-    { key: 'youtube', label: 'YouTube Script', content: aiAssets?.youtube_script },
+    { key: 'tiktok',   label: 'TikTok Hook',    content: aiAssets?.tiktok_hook },
+    { key: 'ig',       label: 'IG Caption',      content: aiAssets?.ig_caption },
+    { key: 'email',    label: 'Email Swipe',     content: aiAssets?.email_swipe },
+    { key: 'youtube',  label: 'YouTube Script',  content: aiAssets?.youtube_script },
   ].filter(t => t.content)
 
   return (
@@ -166,7 +161,6 @@ export default function ProductDetailPage() {
         }
         @media (max-width: 600px) {
           .pd-nav { padding: 0 1rem; height: 56px; }
-          .pd-nav a:last-child { font-size: 12px !important; padding: 0.4rem 0.75rem !important; }
           .pd-body { padding: 1.5rem 1rem; }
           .pd-commission-grid { grid-template-columns: repeat(2, 1fr); }
           .pd-asset-tabs button { font-size: 11.5px !important; padding: 0.4rem 0.75rem !important; }
@@ -192,62 +186,37 @@ export default function ProductDetailPage() {
           {user ? (
             <Link href="/affiliate" style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.5rem 1.1rem', borderRadius: '4px', textDecoration: 'none', whiteSpace: 'nowrap' }}>Dashboard</Link>
           ) : (
-            <Link href="/signup" style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.5rem 1.1rem', borderRadius: '4px', textDecoration: 'none', whiteSpace: 'nowrap' }}>Sign up to promote</Link>
+            <Link href="/signup" style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.5rem 1.1rem', borderRadius: '4px', textDecoration: 'none', whiteSpace: 'nowrap' }}>Affiliate Access</Link>
           )}
         </div>
       </nav>
 
       <div className="pd-body">
-        {/* ── LEFT COLUMN ────────────────────────────────────────── */}
+        {/* LEFT COLUMN */}
         <div>
           <div style={{ fontSize: '12px', color: '#888', marginBottom: '1.5rem' }}>
             <Link href="/marketplace" style={{ color: '#888', textDecoration: 'none' }}>Marketplace</Link>{' · '}
             <span>{product.category}</span>
           </div>
 
-          {/* Video — shown first if present */}
           {(product.video_url || embedUrl) && (
             <div style={{ width: '100%', aspectRatio: '16/9', borderRadius: '6px', overflow: 'hidden', marginBottom: '1rem', background: '#0d0d0d' }}>
               {product.video_url ? (
-                <video
-                  controls
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  poster={images[0] ?? undefined}
-                >
+                <video controls playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} poster={images[0] ?? undefined}>
                   <source src={product.video_url} type="video/mp4" />
-                  Your browser does not support video playback.
                 </video>
               ) : (
-                <iframe
-                  src={embedUrl}
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  title={product.title}
-                />
+                <iframe src={embedUrl} style={{ width: '100%', height: '100%', border: 'none' }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" title={product.title} />
               )}
             </div>
           )}
 
-          {/* Images — stacked vertically */}
           {images.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem' }}>
               {images.map((url, i) => (
-                <div
-                  key={i}
-                  onClick={() => setLightboxIndex(i)}
-                  style={{ width: '100%', borderRadius: '6px', overflow: 'hidden', cursor: 'zoom-in', background: '#f2f0ec', position: 'relative' }}
-                >
-                  <img
-                    src={url}
-                    alt={i === 0 ? product.title : `${product.title} image ${i + 1}`}
-                    style={{ width: '100%', display: 'block', objectFit: 'cover' }}
-                  />
-                  {i === 0 && (
-                    <div style={{ position: 'absolute', top: '0.6rem', left: '0.6rem', background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: '10px', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '2px', letterSpacing: '0.06em' }}>Primary</div>
-                  )}
+                <div key={i} onClick={() => setLightboxIndex(i)} style={{ width: '100%', borderRadius: '6px', overflow: 'hidden', cursor: 'zoom-in', background: '#f2f0ec', position: 'relative' }}>
+                  <img src={url} alt={i === 0 ? product.title : `${product.title} image ${i + 1}`} style={{ width: '100%', display: 'block', objectFit: 'cover' }} />
+                  {i === 0 && <div style={{ position: 'absolute', top: '0.6rem', left: '0.6rem', background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: '10px', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '2px', letterSpacing: '0.06em' }}>Primary</div>}
                 </div>
               ))}
             </div>
@@ -263,13 +232,12 @@ export default function ProductDetailPage() {
           <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: 'clamp(1.75rem, 4vw, 2.5rem)', fontWeight: 500, color: '#0d0d0d', marginBottom: '1.25rem', lineHeight: 1.15 }}>{product.title}</h1>
           <p style={{ fontSize: '15px', color: '#3a3a3a', lineHeight: 1.75, marginBottom: '2rem' }}>{product.description}</p>
 
-          {/* Commission details */}
           <div style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.5rem', marginBottom: '2rem' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', marginBottom: '1rem' }}>Commission details</div>
             <div className="pd-commission-grid">
               {[
-                { label: 'Product price', value: `$${product.price}` },
-                { label: 'Commission rate', value: `${commPct}%` },
+                { label: 'Product price',    value: `$${product.price}` },
+                { label: 'Commission rate',  value: `${commPct}%` },
                 { label: 'You earn per sale', value: `$${earn}` },
               ].map(s => (
                 <div key={s.label}>
@@ -298,7 +266,6 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          {/* AI Assets */}
           {aiAssets && assetTabs.length > 0 && (
             <div style={{ marginBottom: '2rem' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.75rem' }}>AI-generated affiliate assets</div>
@@ -322,27 +289,14 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          {/* Mobile apply card */}
           <div style={{ display: 'none' }} className="pd-mobile-apply">
-            <ApplyCard
-              product={product} earn={earn} commPct={commPct}
-              applied={applied} applying={applying} applySuccess={applySuccess}
-              applyToPromote={applyToPromote} user={user}
-              trendScore={trendScore} trendPct={trendAnimated ? ((trendAnimated - 5) / 5) * 100 : 0}
-              trendColor={trendColor}
-            />
+            <ApplyCard product={product} earn={earn} commPct={commPct} applied={applied} applying={applying} applySuccess={applySuccess} applyToPromote={applyToPromote} user={user} trendScore={trendScore} trendPct={trendAnimated ? ((trendAnimated - 5) / 5) * 100 : 0} trendColor={trendColor} />
           </div>
         </div>
 
-        {/* ── RIGHT COLUMN — sticky apply card ───────────────────── */}
+        {/* RIGHT COLUMN — sticky */}
         <div className="pd-sticky">
-          <ApplyCard
-            product={product} earn={earn} commPct={commPct}
-            applied={applied} applying={applying} applySuccess={applySuccess}
-            applyToPromote={applyToPromote} user={user}
-            trendScore={trendScore} trendPct={trendAnimated ? ((trendAnimated - 5) / 5) * 100 : 0}
-            trendColor={trendColor}
-          />
+          <ApplyCard product={product} earn={earn} commPct={commPct} applied={applied} applying={applying} applySuccess={applySuccess} applyToPromote={applyToPromote} user={user} trendScore={trendScore} trendPct={trendAnimated ? ((trendAnimated - 5) / 5) * 100 : 0} trendColor={trendColor} />
         </div>
       </div>
 
@@ -364,15 +318,18 @@ function ApplyCard({ product, earn, commPct, applied, applying, applySuccess, ap
           <div style={{ background: '#0d0d0d', color: '#ffffff', fontSize: '11px', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '2px' }}>{commPct}% commission</div>
           {product.auto_approve && <div style={{ background: '#f0fdf4', color: '#16a34a', fontSize: '11px', fontWeight: 600, padding: '0.2rem 0.6rem', borderRadius: '2px', border: '1px solid #bbf7d0' }}>Instant approval</div>}
         </div>
+
         <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 600, marginBottom: '0.25rem' }}>${earn}</div>
         <div style={{ fontSize: '13px', color: '#888', marginBottom: '1.5rem' }}>earned per sale · ${product.price} product</div>
 
-        {/* Apply button */}
+        {/* ── Apply button — gated by auth ────────────────────────── */}
         {applied ? (
+          // Already applied (logged-in user who has applied)
           <div style={{ width: '100%', padding: '0.85rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '3px', fontSize: '14px', fontWeight: 600, color: '#16a34a', textAlign: 'center' }}>
             ✓ Applied — pending approval
           </div>
-        ) : (
+        ) : user ? (
+          // Logged-in, hasn't applied yet
           <button
             onClick={applyToPromote}
             disabled={applying}
@@ -380,6 +337,22 @@ function ApplyCard({ product, earn, commPct, applied, applying, applySuccess, ap
           >
             {applying ? 'Applying...' : product.auto_approve ? 'Promote now — instant' : 'Apply to promote'}
           </button>
+        ) : (
+          // NOT logged in — show sign-up gate, no apply button
+          <div>
+            <Link
+              href="/signup"
+              style={{ display: 'block', width: '100%', padding: '0.85rem', background: '#0d0d0d', color: '#ffffff', fontSize: '14px', fontWeight: 600, borderRadius: '3px', textDecoration: 'none', textAlign: 'center', boxSizing: 'border-box' }}
+            >
+              Sign up to apply
+            </Link>
+            <div style={{ marginTop: '0.6rem', textAlign: 'center', fontSize: '12px', color: '#888' }}>
+              Already have an account?{' '}
+              <Link href={`/login?redirect=/marketplace/${product.slug}`} style={{ color: '#0d0d0d', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                Sign in
+              </Link>
+            </div>
+          </div>
         )}
 
         {applySuccess && (
@@ -397,27 +370,21 @@ function ApplyCard({ product, earn, commPct, applied, applying, applySuccess, ap
 
       {/* Stats card */}
       <div style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.25rem' }}>
-        {/* Trend score */}
         <div style={{ marginBottom: '0.85rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
             <div style={{ fontSize: '12px', color: '#888' }}>Trend</div>
             <div style={{ fontSize: '13px', fontWeight: 700, color: trendColor }}>{trendScore}<span style={{ fontSize: '10px', fontWeight: 500, color: '#888' }}>/10</span></div>
           </div>
           <div className="trend-bar-track">
-            <div
-              className="trend-bar-fill"
-              style={{ width: `${trendPct}%`, background: trendColor }}
-            />
+            <div className="trend-bar-fill" style={{ width: `${trendPct}%`, background: trendColor }} />
           </div>
           <div style={{ fontSize: '10px', color: '#888', marginTop: '0.25rem', letterSpacing: '0.04em' }}>
             {trendScore >= 9 ? '🔥 Hot right now' : trendScore >= 7 ? '📈 Trending up' : '⚡ Building momentum'}
           </div>
         </div>
-
-        {/* Category & Listed by */}
         {[
-          { label: 'Category', value: product.category },
-          { label: 'Listed by', value: (product.profiles as any)?.full_name ?? 'Vendor' },
+          { label: 'Category',   value: product.category },
+          { label: 'Listed by',  value: (product.profiles as any)?.full_name ?? 'Vendor' },
         ].map(s => (
           <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <div style={{ fontSize: '12px', color: '#888' }}>{s.label}</div>

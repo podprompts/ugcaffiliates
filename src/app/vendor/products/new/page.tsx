@@ -6,8 +6,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 import VendorNav from '@/components/VendorNav'
-import VideoFormatPicker from '@/components/VideoFormatPicker'
-import { VideoFormatKey } from '@/lib/video-formats'
 
 const CATEGORIES = [
   'Digital Products', 'Courses & Education', 'SaaS & Software',
@@ -28,17 +26,13 @@ export default function NewProductPage() {
   const [isPro, setIsPro] = useState(false)
   const [profileInitial, setProfileInitial] = useState('V')
 
-  // HeyGen state
-  const [heygenImage, setHeygenImage] = useState<string>('')
-  const [heygenImageUploading, setHeygenImageUploading] = useState(false)
-  const [heygenFormat, setHeygenFormat] = useState<VideoFormatKey>('tiktok')
-  const [heygenLoading, setHeygenLoading] = useState(false)
-  const [generatedVideo, setGeneratedVideo] = useState<string>('')
-  const [generatedThumbnail, setGeneratedThumbnail] = useState<string>('')
-  const [generatedScript, setGeneratedScript] = useState<string>('')
+  // Promo video upload state
+  const [promoVideoUploading, setPromoVideoUploading] = useState(false)
+  const [promoVideoUrl, setPromoVideoUrl] = useState<string>('')
+  const [promoVideoName, setPromoVideoName] = useState<string>('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const heygenImageRef = useRef<HTMLInputElement>(null)
+  const promoVideoRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     title: '', description: '', product_url: '', price: '',
@@ -96,21 +90,52 @@ export default function NewProductPage() {
     setUploadingImages(false)
   }
 
-  async function handleHeygenImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // ── Promo video upload ────────────────────────────────────────────────────
+  async function handlePromoVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setHeygenImageUploading(true)
+
+    const maxSize = 500 * 1024 * 1024 // 500MB
+    if (file.size > maxSize) {
+      setError('Video file too large. Maximum size is 500MB.')
+      return
+    }
+
+    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/mov']
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(mp4|mov|webm|qt)$/i)) {
+      setError('Please upload an MP4, MOV, or WebM video file.')
+      return
+    }
+
+    setPromoVideoUploading(true)
+    setError('')
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
     const ext = file.name.split('.').pop()
-    const path = `heygen/${session.user.id}/${Date.now()}.${ext}`
-    const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, { contentType: file.type })
-    if (!uploadError) {
-      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-      setHeygenImage(publicUrl)
+    const path = `promo-videos/${session.user.id}/${Date.now()}.${ext}`
+    const { error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(path, file, { contentType: file.type })
+
+    if (uploadError) {
+      setError(`Video upload failed: ${uploadError.message}`)
+      setPromoVideoUploading(false)
+      return
     }
-    setHeygenImageUploading(false)
+
+    const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
+    setPromoVideoUrl(publicUrl)
+    setPromoVideoName(file.name)
+    set('video_url', publicUrl)
+    setPromoVideoUploading(false)
+  }
+
+  function removePromoVideo() {
+    setPromoVideoUrl('')
+    setPromoVideoName('')
+    set('video_url', '')
+    if (promoVideoRef.current) promoVideoRef.current.value = ''
   }
 
   function removeImage(index: number) {
@@ -131,39 +156,6 @@ export default function NewProductPage() {
       else setError('Failed to generate assets. Try again.')
     } catch { setError('Failed to generate assets.') }
     setAiLoading(false)
-  }
-
-  async function generateHeygenVideo() {
-    if (!heygenImage) { setError('Upload a product image first'); return }
-    if (!form.title || !form.description) { setError('Fill in the product title and description first'); return }
-    setHeygenLoading(true); setError('')
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    try {
-      const res = await fetch('/api/ai/heygen-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          category: form.category,
-          price: form.price,
-          commission_rate: form.commission_rate ? parseFloat(form.commission_rate) / 100 : undefined,
-          imageUrl: heygenImage,
-          format: heygenFormat,
-        }),
-      })
-      const data = await res.json()
-      if (data.video_url) {
-        setGeneratedVideo(data.video_url)
-        setGeneratedThumbnail(data.thumbnail_url ?? '')
-        setGeneratedScript(data.script ?? '')
-        set('video_url', data.video_url)
-      } else {
-        setError(data.error ?? 'Failed to generate video. Try again.')
-      }
-    } catch { setError('Failed to generate video.') }
-    setHeygenLoading(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -230,32 +222,41 @@ export default function NewProductPage() {
       <div className="np-content">
         <div style={{ marginBottom: '2rem' }}>
           <Link href="/vendor/products" style={{ fontSize: '12px', color: '#888', textDecoration: 'none', marginBottom: '1rem', display: 'inline-block' }}>← Back to products</Link>
-          <div style={{ fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase' as const, color: '#888', fontWeight: 500, marginBottom: '0.4rem' }}>New listing</div>
-          <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500 }}>List a product</h1>
+          <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500, margin: 0 }}>List a new product</h1>
         </div>
+
+        {error && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', padding: '1rem', marginBottom: '1.25rem', fontSize: '13px', color: '#dc2626' }}>
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
 
-          {/* Basic Info */}
+          {/* ── Product basics ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e8e6e2' }}>Product details</div>
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '1rem' }}>
+            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Product details</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={labelStyle}>Product title *</label>
-                <input style={inputStyle} type="text" value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Hydration Serum Bundle" required />
+                <label style={labelStyle}>Product name *</label>
+                <input style={inputStyle} value={form.title} onChange={e => set('title', e.target.value)} required placeholder="e.g. Premium Skincare Serum" />
               </div>
               <div>
                 <label style={labelStyle}>Description *</label>
-                <textarea style={{ ...inputStyle, minHeight: '100px', resize: 'vertical' as const }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Describe your product — what it does, who it's for, why people love it..." required />
+                <textarea style={{ ...inputStyle, minHeight: '100px', resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} required placeholder="Describe your product — benefits, ingredients, what makes it unique..." />
+              </div>
+              <div>
+                <label style={labelStyle}>Product URL *</label>
+                <input style={inputStyle} type="url" value={form.product_url} onChange={e => set('product_url', e.target.value)} required placeholder="https://yourstore.com/product" />
               </div>
               <div className="np-two-col">
                 <div>
-                  <label style={labelStyle}>Product URL *</label>
-                  <input style={inputStyle} type="url" value={form.product_url} onChange={e => set('product_url', e.target.value)} placeholder="https://yoursite.com/product" required />
+                  <label style={labelStyle}>Price ($) *</label>
+                  <input style={inputStyle} type="number" min="0" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} required placeholder="49.99" />
                 </div>
                 <div>
-                  <label style={labelStyle}>Category *</label>
-                  <select style={inputStyle} value={form.category} onChange={e => set('category', e.target.value)} required>
+                  <label style={labelStyle}>Category</label>
+                  <select style={inputStyle} value={form.category} onChange={e => set('category', e.target.value)}>
                     <option value="">Select a category</option>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -264,223 +265,134 @@ export default function NewProductPage() {
             </div>
           </div>
 
-          {/* Images */}
+          {/* ── Commission & settings ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>Product images</div>
-            <p style={{ fontSize: '13px', color: '#888', marginBottom: '1.25rem' }}>Upload up to 10 images. First image becomes the primary thumbnail shown in the marketplace.</p>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleImageUpload} />
+            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Commission & settings</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="np-three-col">
+                <div>
+                  <label style={labelStyle}>Commission rate (%) *</label>
+                  <input style={inputStyle} type="number" min="5" max="70" step="1" value={form.commission_rate} onChange={e => set('commission_rate', e.target.value)} required placeholder="20" />
+                  <div style={{ fontSize: '11px', color: '#888', marginTop: '0.35rem' }}>5% – 70%</div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Cookie window (days)</label>
+                  <input style={inputStyle} type="number" min="1" max="90" value={form.cookie_days} onChange={e => set('cookie_days', e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.1rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.auto_approve} onChange={e => set('auto_approve', e.target.checked)} />
+                    <span style={{ fontSize: '13px', color: '#3a3a3a' }}>Auto-approve affiliates</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Product images ── */}
+          <div style={sectionStyle}>
+            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Product images</div>
             {productImages.length > 0 && (
               <div className="np-img-grid">
                 {productImages.map((url, i) => (
-                  <div key={i} style={{ position: 'relative' as const, aspectRatio: '1', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div key={i} style={{ position: 'relative', aspectRatio: '1', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e8e6e2' }}>
                     <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    {i === 0 && <div style={{ position: 'absolute' as const, top: '4px', left: '4px', background: '#0d0d0d', color: '#fff', fontSize: '10px', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: '2px' }}>Primary</div>}
-                    <button type="button" onClick={() => removeImage(i)} style={{ position: 'absolute' as const, top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    <button type="button" onClick={() => removeImage(i)} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '20px', height: '20px', color: '#fff', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    {i === 0 && <div style={{ position: 'absolute', bottom: '4px', left: '4px', background: 'rgba(0,0,0,0.6)', borderRadius: '2px', padding: '1px 5px', fontSize: '9px', color: '#fff', fontWeight: 600 }}>Main</div>}
                   </div>
                 ))}
               </div>
             )}
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingImages || productImages.length >= 10} style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', border: '1px dashed #d0cdc8', background: '#f9f8f6', padding: '0.75rem 1.5rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>
-              {uploadingImages ? 'Uploading...' : productImages.length >= 10 ? 'Max 10 images' : '+ Add images'}
+            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingImages || productImages.length >= 10} style={{ fontSize: '13px', color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.6rem 1.25rem', borderRadius: '3px', background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', opacity: productImages.length >= 10 ? 0.5 : 1 }}>
+              {uploadingImages ? 'Uploading…' : `+ Add images (${productImages.length}/10)`}
             </button>
           </div>
 
-          {/* Video */}
+          {/* ── Promo video upload ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>Product video</div>
-            <p style={{ fontSize: '13px', color: '#888', marginBottom: '1.25rem' }}>Paste an mp4 URL or an unlisted YouTube/Vimeo embed URL.</p>
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '1rem' }}>
-              <div>
-                <label style={labelStyle}>mp4 video URL (primary)</label>
-                <input style={inputStyle} type="url" value={form.video_url} onChange={e => set('video_url', e.target.value)} placeholder="https://yoursite.com/video.mp4" />
-              </div>
-              <div>
-                <label style={labelStyle}>YouTube / Vimeo embed URL (fallback)</label>
-                <input style={inputStyle} type="url" value={form.video_embed_url} onChange={e => set('video_embed_url', e.target.value)} placeholder="https://www.youtube.com/embed/VIDEO_ID" />
-                <div style={{ fontSize: '11px', color: '#888', marginTop: '0.3rem' }}>Use the embed URL, not the watch URL. Unlisted videos only.</div>
-              </div>
-            </div>
-          </div>
+            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '0.5rem' }}>Promo video</div>
+            <p style={{ fontSize: '13px', color: '#888', margin: '0 0 1.25rem' }}>
+              Upload a promo video for affiliates to use when promoting your product. MP4, MOV, or WebM — up to 500MB.
+            </p>
 
-          {/* Pricing */}
-          <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e8e6e2' }}>Pricing & commission</div>
-            <div className="np-three-col">
-              <div>
-                <label style={labelStyle}>Product price ($) *</label>
-                <input style={inputStyle} type="number" min="0.01" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} placeholder="89.00" required />
+            {promoVideoUrl ? (
+              <div style={{ border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ width: '40px', height: '40px', background: '#f2f2f0', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#888" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>{promoVideoName}</div>
+                    <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px' }}>✓ Uploaded successfully</div>
+                  </div>
+                </div>
+                <button type="button" onClick={removePromoVideo} style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '2px', fontFamily: 'inherit' }}>
+                  Remove
+                </button>
               </div>
+            ) : (
               <div>
-                <label style={labelStyle}>Commission (%) *</label>
-                <input style={inputStyle} type="number" min="5" max="70" step="0.5" value={form.commission_rate} onChange={e => set('commission_rate', e.target.value)} placeholder="28" required />
-                <div style={{ fontSize: '11px', color: '#888', marginTop: '0.3rem' }}>Min 5% · Max 70%</div>
-              </div>
-              <div>
-                <label style={labelStyle}>Cookie window (days)</label>
-                <input style={inputStyle} type="number" min="1" max="90" value={form.cookie_days} onChange={e => set('cookie_days', e.target.value)} />
-              </div>
-            </div>
-            {form.price && form.commission_rate && (
-              <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#f9f8f6', borderRadius: '3px', fontSize: '13px', color: '#3a3a3a' }}>
-                Affiliates earn <strong>${(parseFloat(form.price || '0') * parseFloat(form.commission_rate || '0') / 100).toFixed(2)}</strong> per sale · You keep <strong>${(parseFloat(form.price || '0') * (1 - parseFloat(form.commission_rate || '0') / 100) * 0.96).toFixed(2)}</strong> after commission and platform fee
+                <input ref={promoVideoRef} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={handlePromoVideoUpload} style={{ display: 'none' }} />
+                <button type="button" onClick={() => promoVideoRef.current?.click()} disabled={promoVideoUploading} style={{ fontSize: '13px', color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.6rem 1.25rem', borderRadius: '3px', background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', opacity: promoVideoUploading ? 0.6 : 1 }}>
+                  {promoVideoUploading ? 'Uploading video…' : '+ Upload promo video'}
+                </button>
               </div>
             )}
+
+            {/* Optional embed URL fallback */}
+            <div style={{ marginTop: '1rem' }}>
+              <label style={{ ...labelStyle, color: '#aaa' }}>Or paste a video embed URL (YouTube, Vimeo, etc.)</label>
+              <input style={{ ...inputStyle, color: '#888' }} type="url" value={form.video_embed_url} onChange={e => set('video_embed_url', e.target.value)} placeholder="https://youtube.com/embed/..." />
+            </div>
           </div>
 
-          {/* Affiliate rules */}
+          {/* ── Brand guidelines ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e8e6e2' }}>Affiliate rules</div>
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '1rem' }}>
+            <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '1.25rem' }}>Brand guidelines <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={labelStyle}>Brand guidelines</label>
-                <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' as const }} value={form.brand_guidelines} onChange={e => set('brand_guidelines', e.target.value)} placeholder="e.g. Always use our logo correctly. Don't make medical claims..." />
+                <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} value={form.brand_guidelines} onChange={e => set('brand_guidelines', e.target.value)} placeholder="How should affiliates represent your brand? Tone, messaging, dos and don'ts..." />
               </div>
               <div>
                 <label style={labelStyle}>Prohibited terms</label>
-                <input style={inputStyle} type="text" value={form.prohibited_terms} onChange={e => set('prohibited_terms', e.target.value)} placeholder="e.g. cure, guaranteed, free" />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <input type="checkbox" id="auto_approve" checked={form.auto_approve} onChange={e => set('auto_approve', e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-                <label htmlFor="auto_approve" style={{ fontSize: '13px', color: '#3a3a3a', cursor: 'pointer' }}>Auto-approve affiliates — anyone can promote without your review</label>
+                <input style={inputStyle} value={form.prohibited_terms} onChange={e => set('prohibited_terms', e.target.value)} placeholder="e.g. cure, guaranteed, free — words affiliates must not use" />
               </div>
             </div>
           </div>
 
-          {/* AI Text Assets — unchanged */}
+          {/* ── AI affiliate assets ── */}
           <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>AI affiliate copy assets</div>
-            <p style={{ fontSize: '13px', color: '#888', marginBottom: '1.25rem' }}>Generate ready-to-use TikTok hooks, Instagram captions, email swipes, and YouTube scripts for your affiliates.</p>
-            <button type="button" onClick={generateAIAssets} disabled={aiLoading} style={{ fontSize: '13px', fontWeight: 600, color: '#0d0d0d', border: '1px solid #0d0d0d', background: 'none', padding: '0.6rem 1.25rem', borderRadius: '3px', cursor: aiLoading ? 'not-allowed' : 'pointer', opacity: aiLoading ? 0.6 : 1, fontFamily: 'inherit' }}>
-              {aiLoading ? 'Generating...' : 'Generate AI copy assets'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600 }}>AI affiliate assets</div>
+                <div style={{ fontSize: '12px', color: '#aaa', marginTop: '0.25rem' }}>TikTok hooks, IG captions, email swipes & YouTube scripts for your affiliates</div>
+              </div>
+              <button type="button" onClick={generateAIAssets} disabled={aiLoading} style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.6rem 1.25rem', borderRadius: '3px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: aiLoading ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+                {aiLoading ? 'Generating…' : aiAssets ? 'Regenerate' : 'Generate assets'}
+              </button>
+            </div>
+
             {aiAssets && (
-              <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column' as const, gap: '1px', background: '#e8e6e2' }}>
-                {[
-                  { label: 'TikTok Hook', content: aiAssets.tiktok_hook },
-                  { label: 'Instagram Caption', content: aiAssets.ig_caption },
-                  { label: 'Email Swipe', content: aiAssets.email_swipe },
-                  { label: 'YouTube Script', content: aiAssets.youtube_script },
-                ].map(asset => asset.content && (
-                  <div key={asset.label} style={{ background: '#ffffff', padding: '1rem 1.25rem' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#888', marginBottom: '0.4rem' }}>{asset.label}</div>
-                    <div style={{ fontSize: '13px', color: '#3a3a3a', lineHeight: 1.6 }}>{asset.content}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {Object.entries(aiAssets).map(([key, value]) => (
+                  <div key={key} style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '3px', padding: '1rem' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#888', marginBottom: '0.5rem' }}>{key.replace(/_/g, ' ')}</div>
+                    <div style={{ fontSize: '13px', color: '#3a3a3a', lineHeight: 1.6 }}>{value as string}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* AI Avatar Video — HeyGen — Pro only */}
-          <div style={{ ...sectionStyle, border: '1px solid #ddd6fe', background: '#f5f3ff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#6d28d9' }}>AI avatar video — HeyGen</div>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff', background: '#7c3aed', padding: '0.15rem 0.5rem', borderRadius: '100px' }}>Pro</span>
-            </div>
-            <p style={{ fontSize: '13px', color: '#6d28d9', marginBottom: '1.5rem', lineHeight: 1.65, opacity: 0.85 }}>
-              Upload a product photo — an AI avatar will speak a generated promo script with full audio, lip-sync, and auto-captions. Choose your target platform to get the right video format.
-            </p>
-
-            {!isPro ? (
-              <div style={{ background: 'rgba(109,40,217,0.08)', border: '1px solid #ddd6fe', borderRadius: '3px', padding: '1rem 1.25rem' }}>
-                <div style={{ fontSize: '13px', color: '#6d28d9', fontWeight: 500 }}>Upgrade to Pro to unlock AI avatar video generation.</div>
-                <Link href="/pricing" style={{ fontSize: '12px', color: '#7c3aed', textDecoration: 'underline', marginTop: '0.4rem', display: 'inline-block' }}>View Pro plan →</Link>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '1.5rem' }}>
-
-                {/* Step 1 — Product photo */}
-                <div>
-                  <label style={{ ...labelStyle, color: '#6d28d9' }}>Step 1 — Upload your product photo</label>
-                  <p style={{ fontSize: '12px', color: '#7c3aed', marginBottom: '0.75rem', opacity: 0.85 }}>This image appears as the video background behind the avatar.</p>
-                  <input ref={heygenImageRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleHeygenImageUpload} />
-                  {heygenImage ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' as const }}>
-                      <img src={heygenImage} alt="Product" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd6fe' }} />
-                      <div>
-                        <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 500, marginBottom: '0.4rem' }}>✓ Image uploaded</div>
-                        <button type="button" onClick={() => heygenImageRef.current?.click()} style={{ fontSize: '12px', color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>Change image</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => heygenImageRef.current?.click()} disabled={heygenImageUploading} style={{ fontSize: '13px', fontWeight: 500, color: '#7c3aed', border: '1px dashed #c4b5fd', background: 'rgba(109,40,217,0.04)', padding: '0.75rem 1.5rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                      {heygenImageUploading ? 'Uploading...' : '+ Upload product photo'}
-                    </button>
-                  )}
-                </div>
-
-                {/* Step 2 — Platform / format */}
-                <div>
-                  <label style={{ ...labelStyle, color: '#6d28d9' }}>Step 2 — Choose target platform</label>
-                  <p style={{ fontSize: '12px', color: '#7c3aed', marginBottom: '0.75rem', opacity: 0.85 }}>Selects the video dimensions. You can generate multiple formats after listing.</p>
-                  {/* Override VideoFormatPicker colors to match purple theme */}
-                  <div style={{ '--picker-active-bg': '#7c3aed', '--picker-active-border': '#7c3aed' } as React.CSSProperties}>
-                    <VideoFormatPicker
-                      value={heygenFormat}
-                      onChange={setHeygenFormat}
-                      disabled={heygenLoading}
-                    />
-                  </div>
-                </div>
-
-                {/* Step 3 — Script preview note */}
-                <div style={{ background: 'rgba(109,40,217,0.05)', border: '1px solid #ddd6fe', borderRadius: '4px', padding: '0.75rem 1rem', fontSize: '12px', color: '#6d28d9' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '0.3rem', fontSize: '11px', letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>✦ How it works</div>
-                  <div style={{ color: '#7c3aed', lineHeight: 1.6 }}>
-                    Claude reads your product title, description, price, and commission rate, then writes a 45–60 second spoken promo script. HeyGen renders an AI avatar delivering that script with full audio, lip-sync, and auto-captions — using your product photo as the background.
-                  </div>
-                </div>
-
-                {/* Generate button */}
-                <button
-                  type="button"
-                  onClick={generateHeygenVideo}
-                  disabled={heygenLoading || !heygenImage || !form.title || !form.description}
-                  style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: heygenLoading ? '#888' : '#7c3aed', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '3px', cursor: (heygenLoading || !heygenImage || !form.title || !form.description) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' as const, opacity: (!heygenImage || !form.title || !form.description) ? 0.5 : 1 }}
-                >
-                  {heygenLoading ? 'Generating avatar video... (~2–3 min)' : 'Generate AI avatar video'}
-                </button>
-
-                {(!form.title || !form.description) && !heygenLoading && (
-                  <div style={{ fontSize: '12px', color: '#888', marginTop: '-0.75rem' }}>Fill in the product title and description above first.</div>
-                )}
-
-                {heygenLoading && (
-                  <div style={{ fontSize: '12px', color: '#888', padding: '0.75rem 1rem', background: 'rgba(109,40,217,0.05)', borderRadius: '3px' }}>
-                    HeyGen is rendering your avatar video with audio. This takes 2–3 minutes. Don't close this page.
-                  </div>
-                )}
-
-                {/* Result */}
-                {generatedVideo && (
-                  <div>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#16a34a', marginBottom: '0.75rem' }}>✓ Avatar video generated successfully</div>
-                    <video controls style={{ width: '100%', borderRadius: '4px', background: '#0d0d0d', maxHeight: '400px' }} src={generatedVideo} />
-
-                    {generatedScript && (
-                      <div style={{ marginTop: '1rem', background: '#ffffff', border: '1px solid #ddd6fe', borderRadius: '4px', padding: '1rem 1.25rem' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#888', marginBottom: '0.5rem' }}>Generated script</div>
-                        <div style={{ fontSize: '13px', color: '#3a3a3a', lineHeight: 1.7 }}>{generatedScript}</div>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-                      <a href={generatedVideo} download style={{ fontSize: '12px', fontWeight: 600, color: '#7c3aed', textDecoration: 'underline' }}>Download video</a>
-                      <span style={{ fontSize: '12px', color: '#888' }}>· Auto-added as your product video above</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {error && (
-            <div style={{ fontSize: '13px', color: '#c0392b', padding: '0.75rem 1rem', background: '#fdf2f2', borderRadius: '3px', border: '1px solid #f5c6cb', marginBottom: '1rem' }}>{error}</div>
-          )}
-
-          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' as const }}>
-            <Link href="/vendor/products" style={{ fontSize: '13px', fontWeight: 500, color: '#888', border: '1px solid #e8e6e2', padding: '0.7rem 1.5rem', borderRadius: '3px', textDecoration: 'none', background: '#ffffff' }}>Cancel</Link>
-            <button type="submit" disabled={loading} style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: loading ? '#888' : '#0d0d0d', border: 'none', padding: '0.7rem 2rem', borderRadius: '3px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-              {loading ? 'Listing product...' : 'List product'}
+          {/* ── Submit ── */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', paddingTop: '0.5rem' }}>
+            <Link href="/vendor/products" style={{ fontSize: '13px', color: '#888', padding: '0.7rem 1.5rem', textDecoration: 'none', fontFamily: 'inherit' }}>Cancel</Link>
+            <button type="submit" disabled={loading} style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.7rem 1.75rem', borderRadius: '3px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: loading ? 0.6 : 1 }}>
+              {loading ? 'Listing product…' : 'List product'}
             </button>
           </div>
         </form>

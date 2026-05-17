@@ -1,7 +1,8 @@
-// src/app/page.tsx - Updated to pull real products from Supabase
+// src/app/page.tsx
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import Navbar from '@/components/Navbar'
+import ProductCarousel from '@/components/ProductCarousel'
 
 async function getFeaturedProducts() {
   const supabase = createClient(
@@ -13,18 +14,66 @@ async function getFeaturedProducts() {
     .select('id, slug, title, price, commission_rate, image_url, images, category, profiles!vendor_id(full_name)')
     .eq('status', 'active')
     .order('total_conversions', { ascending: false })
-    .limit(5)
+    .limit(10)
   return data ?? []
 }
 
+async function getStats() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  const [{ count: affiliates }, { count: products }, { data: convData }] = await Promise.all([
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'affiliate'),
+    supabase.from('products').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    supabase.from('conversions').select('commission_amount').eq('status', 'paid'),
+  ])
+  const totalCommissions = (convData ?? []).reduce((s: number, c: any) => s + (c.commission_amount ?? 0), 0)
+  return {
+    affiliates: affiliates ?? 0,
+    products:   products ?? 0,
+    commissions: totalCommissions,
+  }
+}
+
+async function getCategoryCounts() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  const { data } = await supabase
+    .from('products')
+    .select('category')
+    .eq('status', 'active')
+
+  const counts: Record<string, number> = {}
+  for (const row of data ?? []) {
+    if (row.category) counts[row.category] = (counts[row.category] ?? 0) + 1
+  }
+  return counts
+}
+
+const CATEGORIES = [
+  'Digital Products', 'Courses & Education', 'Beauty & Wellness', 'Fashion & Apparel',
+  'SaaS & Software', 'Fitness', 'Home & Living', 'Food & Drink',
+]
+
 export default async function HomePage() {
-  const featuredProducts = await getFeaturedProducts()
+  const [featuredProducts, stats, categoryCounts] = await Promise.all([
+    getFeaturedProducts(),
+    getStats(),
+    getCategoryCounts(),
+  ])
+
+  const fmt = (n: number) =>
+    n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M+`
+    : n >= 1_000 ? `$${(n / 1_000).toFixed(0)}K+`
+    : `$${n.toFixed(0)}`
 
   return (
     <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', background: '#ffffff', color: '#0d0d0d', overflowX: 'hidden' }}>
       <style>{`
         .hero-h1 { font-family: var(--font-cormorant), serif; font-size: 3.75rem; font-weight: 500; line-height: 1.05; color: #ffffff; margin-bottom: 1rem; }
-        .product-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.25rem; }
         .category-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e8e6e2; }
         .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3rem; }
         .role-split { display: grid; grid-template-columns: 1fr 1fr; }
@@ -38,10 +87,7 @@ export default async function HomePage() {
         .ai-strip { background: #1a1a18; padding: 4rem 2.5rem; }
         .cta-section { padding: 5rem 2.5rem; text-align: center; background: #f2f0ec; }
         .role-pane { padding: 4rem 3rem; border-top: 1px solid #e8e6e2; }
-        .prod-card { display: block; text-decoration: none; color: inherit; cursor: pointer; }
-        .prod-card:hover .prod-title { text-decoration: underline; text-underline-offset: 2px; }
         @media (max-width: 1024px) {
-          .product-grid { grid-template-columns: repeat(3, 1fr); }
           .ai-strip-grid { grid-template-columns: 1fr; gap: 2rem; }
         }
         @media (max-width: 768px) {
@@ -51,7 +97,6 @@ export default async function HomePage() {
           .hero-btns { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
           .section-pad { padding: 2rem 1rem; }
-          .product-grid { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
           .category-grid { grid-template-columns: repeat(2, 1fr); }
           .how-grid { grid-template-columns: 1fr; gap: 2rem; }
           .role-split { grid-template-columns: 1fr; }
@@ -63,19 +108,17 @@ export default async function HomePage() {
           .announce { font-size: 11px; padding: 0.4rem 0.75rem; }
         }
         @media (max-width: 480px) {
-          .product-grid { grid-template-columns: repeat(2, 1fr); }
           .category-grid { grid-template-columns: 1fr; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
         }
       `}</style>
 
-      {/* ANNOUNCE BAR */}
+      {/* ANNOUNCE BAR — remove when live */}
       <div className="announce" style={{ background: '#f9f8f6', borderBottom: '1px solid #e8e6e2', textAlign: 'center', padding: '0.55rem 1rem', fontSize: '12.5px', color: '#3a3a3a' }}>
-        No request will be approved, currently testing — Join thousands of affiliates and vendors already on UGCA.{' '}
+        Now in beta — join early and get 3 months free on any plan.{' '}
         <Link href="/signup" style={{ color: '#0d0d0d', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '2px' }}>Sign up free</Link>
       </div>
 
-      {/* NAV */}
       <Navbar />
 
       {/* HERO */}
@@ -87,18 +130,23 @@ export default async function HomePage() {
         <div className="hero-content">
           <h1 className="hero-h1">Find your next<br />top seller</h1>
           <p style={{ fontSize: '15px', fontWeight: 500, color: 'rgba(255,255,255,0.88)', marginBottom: '1.75rem', lineHeight: 1.55, maxWidth: '42ch' }}>
-            Sign up to promote products from 1,000+ vendors and earn commissions on every sale you drive.
+            Sign up to promote products from vendors and earn commissions on every sale you drive.
           </p>
           <div className="hero-btns">
             <Link href="/signup" style={{ background: '#ffffff', color: '#0d0d0d', fontSize: '13.5px', fontWeight: 600, padding: '0.7rem 1.6rem', borderRadius: '3px', textDecoration: 'none' }}>Sign up to promote</Link>
-            <Link href="/vendors" style={{ fontSize: '13.5px', fontWeight: 500, color: '#ffffff', textDecoration: 'underline', textUnderlineOffset: '3px', opacity: 0.9 }}>Are you a vendor? Sign up to sell</Link>
+            <Link href="/vendor-signup" style={{ fontSize: '13.5px', fontWeight: 500, color: '#ffffff', textDecoration: 'underline', textUnderlineOffset: '3px', opacity: 0.9 }}>Are you a vendor? Sign up to sell</Link>
           </div>
         </div>
       </div>
 
-      {/* STAT BAR */}
+      {/* STAT BAR — real data */}
       <div className="stat-bar">
-        {[{ n: '$4.2M+', l: 'Total commissions tracked' }, { n: '1,200+', l: 'Active products listed' }, { n: '18,400', l: 'Registered affiliates' }, { n: '48 hrs', l: 'Avg. time to first sale' }].map(s => (
+        {[
+          { n: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', l: 'Total commissions tracked' },
+          { n: stats.products > 0 ? `${stats.products}+` : 'New', l: 'Active products listed' },
+          { n: stats.affiliates > 0 ? stats.affiliates.toLocaleString() : 'Growing', l: 'Registered affiliates' },
+          { n: '30 days', l: 'Cookie tracking window' },
+        ].map(s => (
           <div key={s.l} style={{ padding: '1.5rem 2rem', borderRight: '1px solid #e8e6e2', textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.03em', color: '#0d0d0d' }}>{s.n}</div>
             <div style={{ fontSize: '12px', color: '#888888', fontWeight: 500, marginTop: '0.2rem' }}>{s.l}</div>
@@ -106,75 +154,35 @@ export default async function HomePage() {
         ))}
       </div>
 
-      {/* REAL PRODUCTS from Supabase */}
-      <section className="section-pad">
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 500 }}>
-            {featuredProducts.length > 0 ? 'Products to promote' : 'Trending products to promote'}
-          </h2>
-          <Link href="/marketplace" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', border: '1px solid #d0cdc8', padding: '0.45rem 1rem', borderRadius: '3px', textDecoration: 'none', whiteSpace: 'nowrap' }}>All products</Link>
-        </div>
-        <div className="product-grid">
-          {featuredProducts.length > 0 ? featuredProducts.map(p => {
-            const vendor = (p as any).profiles as any
-            const earn = (p.price * p.commission_rate).toFixed(2)
-            const commPct = (p.commission_rate * 100).toFixed(0)
-            const primaryImage = (p as any).images?.[0] ?? p.image_url
-            const slug = (p as any).slug ?? p.id
-            return (
-              <Link key={p.id} href={`/marketplace/${slug}`} className="prod-card">
-                <div style={{ width: '100%', aspectRatio: '1', background: '#f2f0ec', borderRadius: '2px', marginBottom: '0.75rem', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {primaryImage ? (
-                    <img src={primaryImage} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>No image</span>
-                  )}
-                  <div style={{ position: 'absolute', bottom: '8px', left: '8px', background: '#0d0d0d', color: '#ffffff', fontSize: '10.5px', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '2px' }}>{commPct}% commission</div>
-                </div>
-                <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '12px', fontWeight: 500, color: '#888', marginBottom: '0.2rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{vendor?.full_name ?? 'Vendor'}</div>
-                <div className="prod-title" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', marginBottom: '0.3rem', lineHeight: 1.35 }}>{p.title}</div>
-                <div style={{ fontSize: '12px', color: '#888' }}>Earn up to <strong style={{ color: '#0d0d0d' }}>${earn}</strong> per sale</div>
-              </Link>
-            )
-          }) : (
-            [
-              { brand: 'Your Brand', name: 'List your first product', commission: '—', earn: '—' },
-              { brand: 'Creator Co.', name: 'UGC products coming soon', commission: '—', earn: '—' },
-            ].map(p => (
-              <Link key={p.name} href="/marketplace" className="prod-card">
-                <div style={{ width: '100%', aspectRatio: '1', background: '#f2f0ec', borderRadius: '2px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: '10px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Coming soon</span>
-                </div>
-                <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '12px', color: '#888', marginBottom: '0.2rem', textTransform: 'uppercase' }}>{p.brand}</div>
-                <div className="prod-title" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>{p.name}</div>
-              </Link>
-            ))
-          )}
-        </div>
-      </section>
+      {/* CAROUSEL — infinite scroll */}
+      {featuredProducts.length > 0 && (
+        <section className="section-pad">
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h2 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 500 }}>Products to promote</h2>
+            <Link href="/marketplace" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', border: '1px solid #d0cdc8', padding: '0.45rem 1rem', borderRadius: '3px', textDecoration: 'none', whiteSpace: 'nowrap' }}>All products</Link>
+          </div>
+          <ProductCarousel products={featuredProducts as any} />
+        </section>
+      )}
 
       <div style={{ height: '1px', background: '#e8e6e2', margin: '0 2.5rem' }} />
 
-      {/* CATEGORIES */}
+      {/* CATEGORIES — real counts */}
       <section className="section-pad" style={{ background: '#f9f8f6' }}>
         <h2 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 500, marginBottom: '1.75rem' }}>Browse by category</h2>
         <div className="category-grid">
-          {[
-            { name: 'Digital Products', count: '214 products' },
-            { name: 'Courses & Education', count: '189 products' },
-            { name: 'Beauty & Wellness', count: '312 products' },
-            { name: 'Fashion & Apparel', count: '278 products' },
-            { name: 'SaaS & Software', count: '97 products' },
-            { name: 'Fitness', count: '143 products' },
-            { name: 'Home & Living', count: '201 products' },
-            { name: 'Food & Drink', count: '119 products' },
-          ].map(c => (
-            <Link key={c.name} href={`/marketplace?category=${encodeURIComponent(c.name)}`}
-              style={{ background: '#ffffff', padding: '1.75rem 1.5rem', cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
-              <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.15rem', fontWeight: 500, color: '#0d0d0d' }}>{c.name}</div>
-              <div style={{ fontSize: '12px', color: '#888888', marginTop: '0.4rem' }}>{c.count}</div>
-            </Link>
-          ))}
+          {CATEGORIES.map(name => {
+            const count = categoryCounts[name] ?? 0
+            return (
+              <Link key={name} href={`/marketplace?category=${encodeURIComponent(name)}`}
+                style={{ background: '#ffffff', padding: '1.75rem 1.5rem', cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
+                <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.15rem', fontWeight: 500, color: '#0d0d0d' }}>{name}</div>
+                <div style={{ fontSize: '12px', color: '#888888', marginTop: '0.4rem' }}>
+                  {count > 0 ? `${count} product${count !== 1 ? 's' : ''}` : 'Coming soon'}
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </section>
 
@@ -200,7 +208,7 @@ export default async function HomePage() {
       {/* ROLE SPLIT */}
       <div className="role-split">
         {[
-          { eyebrow: 'For vendors', headline: 'Your product.\nTheir audience.', body: 'List once, reach thousands of motivated creators who are genuinely incentivized to sell. You control every term.', features: ['Set commissions from 5% to 70%', 'Auto-approve or manually review affiliates', 'Real-time sales and earnings dashboard', 'Enforce brand guidelines and prohibited terms', 'AI UGC video generation (Pro)'], cta: 'Sign up to sell', href: '/vendors', borderRight: true },
+          { eyebrow: 'For vendors', headline: 'Your product.\nTheir audience.', body: 'List once, reach thousands of motivated creators who are genuinely incentivized to sell. You control every term.', features: ['Set commissions from 5% to 70%', 'Auto-approve or manually review affiliates', 'Real-time sales and earnings dashboard', 'Enforce brand guidelines and prohibited terms', 'AI UGC video generation (Pro)'], cta: 'Sign up to sell', href: '/vendor-signup', borderRight: true },
           { eyebrow: 'For affiliates', headline: 'Your content.\nReal income.', body: 'Browse products that match your niche. Get your link. Post your content. Commissions paid directly — no minimums.', features: ['AI-generated hooks and captions per product', 'Unique tracked link for every product', 'Live commission and click dashboard', '30-day cookie tracking window', 'Free to join — no monthly fees'], cta: 'Sign up to promote', href: '/signup', borderRight: false },
         ].map(pane => (
           <div key={pane.eyebrow} className="role-pane" style={{ borderRight: pane.borderRight ? '1px solid #e8e6e2' : 'none' }}>
@@ -255,7 +263,7 @@ export default async function HomePage() {
         <h2 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '3rem', fontWeight: 500, marginBottom: '0.85rem', letterSpacing: '-0.01em' }}>Ready to grow your reach?</h2>
         <p style={{ fontSize: '14px', color: '#3a3a3a', marginBottom: '2rem' }}>Join vendors and affiliates already building on UGCA. Free to start.</p>
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link href="/vendors" style={{ background: '#0d0d0d', color: '#ffffff', fontSize: '13.5px', fontWeight: 600, padding: '0.75rem 2rem', borderRadius: '3px', textDecoration: 'none' }}>List your product</Link>
+          <Link href="/vendor-signup" style={{ background: '#0d0d0d', color: '#ffffff', fontSize: '13.5px', fontWeight: 600, padding: '0.75rem 2rem', borderRadius: '3px', textDecoration: 'none' }}>List your product</Link>
           <Link href="/signup" style={{ background: '#ffffff', color: '#0d0d0d', fontSize: '13.5px', fontWeight: 500, padding: '0.75rem 2rem', border: '1px solid #d0cdc8', borderRadius: '3px', textDecoration: 'none' }}>Start promoting</Link>
         </div>
       </div>
@@ -264,9 +272,11 @@ export default async function HomePage() {
       <footer style={{ borderTop: '1px solid #e8e6e2', padding: '2.25rem 2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1rem', fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase' }}>U G C A</div>
         <div style={{ display: 'flex', gap: '1.75rem', flexWrap: 'wrap' }}>
-          {['Terms', 'Privacy', 'Pricing', 'Marketplace', 'Vendors'].map(l => (
-            <Link key={l} href={`/${l.toLowerCase()}`} style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>{l}</Link>
-          ))}
+          <Link href="/terms"         style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>Terms</Link>
+          <Link href="/privacy"       style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>Privacy</Link>
+          <Link href="/pricing"       style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>Pricing</Link>
+          <Link href="/marketplace"   style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>Marketplace</Link>
+          <Link href="/vendor-signup" style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>Vendors</Link>
         </div>
         <div style={{ fontSize: '12px', color: '#888' }}>2026 UGCAffiliates, Inc.</div>
       </footer>

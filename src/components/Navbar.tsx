@@ -85,7 +85,7 @@ export default function Navbar() {
 
           {/* Desktop actions */}
           <div className="nav-actions">
-            <Link href="/vendors" style={{ fontSize: '13px', fontWeight: 500, color: '#3a3a3a', textDecoration: 'none' }}>Sign up to sell</Link>
+            <Link href="/vendor-signup" style={{ fontSize: '13px', fontWeight: 500, color: '#3a3a3a', textDecoration: 'none' }}>Sign up to sell</Link>
             <Link href="/login" style={{ fontSize: '13px', fontWeight: 500, color: '#3a3a3a', textDecoration: 'none' }}>Sign in</Link>
             <Link href="/signup" style={{ background: '#0d0d0d', color: '#ffffff', fontSize: '13px', fontWeight: 600, padding: '0.55rem 1.4rem', borderRadius: '4px', textDecoration: 'none', whiteSpace: 'nowrap' }}>Sign up to promote</Link>
           </div>
@@ -105,7 +105,7 @@ export default function Navbar() {
           <div className="mobile-menu">
             <div className="mobile-menu-section-label">Account</div>
             <Link href="/login" className="mobile-menu-link" onClick={() => setOpen(false)}>Sign in</Link>
-            <Link href="/vendors" className="mobile-menu-link" onClick={() => setOpen(false)}>Sign up to sell</Link>
+            <Link href="/vendor-signup" className="mobile-menu-link" onClick={() => setOpen(false)}>Sign up to sell</Link>
             <Link href="/signup" className="mobile-menu-cta" onClick={() => setOpen(false)}>Sign up to promote</Link>
 
             <div className="mobile-menu-section-label" style={{ marginTop: '0.75rem' }}>Browse</div>
