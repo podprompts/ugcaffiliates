@@ -39,9 +39,6 @@ function VendorDashboard() {
       if (!res.ok) { router.push('/login'); return }
       const { profile: prof } = await res.json()
 
-      // ── Gate: must be a vendor role ──────────────────────────────────────
-      // stripe_onboarded check removed — listing is now free.
-      // Role is set to 'vendor' on vendor signup automatically.
       if (!prof || prof.role !== 'vendor') {
         router.push('/login?redirected=1')
         return
@@ -95,6 +92,20 @@ function VendorDashboard() {
   )
 
   const profileInitial = profile?.full_name?.charAt(0)?.toUpperCase() ?? 'V'
+  const isNewVendor = products.length === 0
+
+  // Checklist state
+  const hasBusinessName = !!(profile?.business_name)
+  const hasProduct = products.length > 0
+  const hasApprovedAffiliate = conversions.length > 0
+  const checklistDone = hasBusinessName && hasProduct && hasApprovedAffiliate
+  const checklistSteps = [
+    { done: true,             label: 'Create your vendor account',   href: null },
+    { done: hasBusinessName,  label: 'Add your business name',        href: '/vendor/settings', cta: 'Go to Settings' },
+    { done: hasProduct,       label: 'List your first product',       href: '/vendor/products/new', cta: 'List a product' },
+    { done: hasApprovedAffiliate, label: 'Get your first affiliate sale', href: null, cta: null, sub: 'Share your marketplace link to attract affiliates' },
+  ]
+  const completedCount = checklistSteps.filter(s => s.done).length
 
   return (
     <div style={{ minHeight: '100vh', background: '#f9f8f6', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
@@ -102,6 +113,8 @@ function VendorDashboard() {
         .v-content { max-width: 1100px; margin: 0 auto; padding: 2.5rem 2rem; }
         .v-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e8e6e2; margin-bottom: 2rem; }
         .v-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+        .checklist-step { display: flex; align-items: flex-start; gap: 0.875rem; padding: 0.875rem 0; border-bottom: 1px solid #f2f0ec; }
+        .checklist-step:last-child { border-bottom: none; }
         @media (max-width: 768px) {
           .v-content { padding: 1.25rem 1rem; }
           .v-stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -115,15 +128,70 @@ function VendorDashboard() {
         <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888', fontWeight: 500, marginBottom: '0.3rem' }}>Vendor Dashboard</div>
-            <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500 }}>Welcome back, {profile?.business_name ?? profile?.full_name?.split(' ')[0] ?? 'Vendor'}</h1>
+            <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500 }}>
+              Welcome{isNewVendor ? '' : ' back'}, {profile?.business_name ?? profile?.full_name?.split(' ')[0] ?? 'Vendor'}
+            </h1>
           </div>
           <Link href="/vendor/products/new" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', border: '1px solid #d0cdc8', padding: '0.5rem 1.25rem', borderRadius: '3px', textDecoration: 'none', whiteSpace: 'nowrap' }}>+ List a new product</Link>
         </div>
 
-        {/* Platform fee notice */}
+        {/* Free listing notice */}
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', fontSize: '13px', color: '#16a34a' }}>
-          ✓ Free to list · 4% platform fee on confirmed affiliate sales only
+          ✓ Free to list · 10% platform fee on confirmed affiliate sales only
         </div>
+
+        {/* ── Getting Started Checklist — shown until all steps complete ── */}
+        {!checklistDone && (
+          <div style={{ background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#0d0d0d' }}>Getting started</div>
+                <div style={{ fontSize: '12px', color: '#888', marginTop: '0.2rem' }}>{completedCount} of {checklistSteps.length} steps complete</div>
+              </div>
+              {/* Progress bar */}
+              <div style={{ width: '120px', height: '4px', background: '#f2f0ec', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#0d0d0d', borderRadius: '2px', width: `${(completedCount / checklistSteps.length) * 100}%`, transition: 'width 0.4s ease' }} />
+              </div>
+            </div>
+
+            <div>
+              {checklistSteps.map((step, i) => (
+                <div key={i} className="checklist-step">
+                  {/* Check circle */}
+                  <div style={{
+                    width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0, marginTop: '1px',
+                    background: step.done ? '#0d0d0d' : '#f2f0ec',
+                    border: step.done ? 'none' : '1.5px solid #d0cdc8',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {step.done && (
+                      <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="#ffffff" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+
+                  {/* Label + CTA */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: step.done ? 400 : 500, color: step.done ? '#888' : '#0d0d0d', textDecoration: step.done ? 'line-through' : 'none' }}>
+                      {step.label}
+                    </div>
+                    {step.sub && !step.done && (
+                      <div style={{ fontSize: '12px', color: '#888', marginTop: '0.15rem' }}>{step.sub}</div>
+                    )}
+                  </div>
+
+                  {/* CTA link */}
+                  {!step.done && step.href && step.cta && (
+                    <Link href={step.href} style={{ fontSize: '12px', fontWeight: 600, color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.3rem 0.75rem', borderRadius: '3px', textDecoration: 'none', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      {step.cta}
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="v-stat-grid">
           {[
