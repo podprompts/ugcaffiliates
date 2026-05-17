@@ -1,8 +1,8 @@
-// src/app/auth/callback/route.ts
+\// src/app/auth/callback/route.ts
 // Handles Supabase auth callbacks:
-// - Email confirmation → /login?confirmed=true
-// - Google OAuth → role-based dashboard redirect
-// - Password reset → /reset-password
+// - Email confirmation (token_hash) → /login?confirmed=true
+// - Google OAuth (code) → role-based dashboard redirect
+// - Password reset (code + type=recovery) → /reset-password
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
@@ -10,13 +10,10 @@ import { cookies } from 'next/headers'
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
-  const code = searchParams.get('code')
-  const role = searchParams.get('role')   // passed from Google signup flow
-  const type = searchParams.get('type')   // 'recovery' for password reset, 'signup' for email confirm
-
-  if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
-  }
+  const code       = searchParams.get('code')
+  const tokenHash  = searchParams.get('token_hash')
+  const type       = searchParams.get('type')
+  const role       = searchParams.get('role')
 
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -35,24 +32,36 @@ export async function GET(req: NextRequest) {
     }
   )
 
+  // ── Email confirmation via token_hash ─────────────────────────────────────
+  // Fired when user clicks the confirm email link from signup
+  if (tokenHash && type === 'signup') {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: 'signup',
+    })
+    if (error) {
+      console.error('[callback] token_hash verify error:', error)
+      return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+    }
+    return NextResponse.redirect(`${origin}/login?confirmed=true`)
+  }
+
+  // ── No code and no token_hash — bail ─────────────────────────────────────
+  if (!code) {
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+  }
+
   // ── Password reset ────────────────────────────────────────────────────────
   if (type === 'recovery') {
     await supabase.auth.exchangeCodeForSession(code)
     return NextResponse.redirect(`${origin}/reset-password`)
   }
 
-  // ── Email confirmation ────────────────────────────────────────────────────
-  // When a user clicks the confirm email link, send them to login with a
-  // success message so they know to sign in. Don't auto-login them.
-  if (type === 'signup' || type === 'email') {
-    await supabase.auth.exchangeCodeForSession(code)
-    return NextResponse.redirect(`${origin}/login?confirmed=true`)
-  }
-
   // ── Google OAuth / general code exchange ─────────────────────────────────
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error || !data.user) {
+    console.error('[callback] code exchange error:', error)
     return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
 
@@ -71,8 +80,6 @@ export async function GET(req: NextRequest) {
     .eq('id', data.user.id)
     .single()
 
-  // ── Role-based redirect ───────────────────────────────────────────────────
-  // stripe_onboarded check removed — vendors list for free now
   const destination =
     profile?.role === 'vendor' ? '/vendor' :
     profile?.role === 'admin'  ? '/admin'  :
