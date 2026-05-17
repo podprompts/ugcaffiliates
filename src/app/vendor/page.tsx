@@ -1,5 +1,5 @@
 // src/app/vendor/page.tsx
-// Vendor dashboard — no subscription gate, role-based access only
+// Vendor dashboard — approve/decline calls /api/affiliate/approve (creates link)
 'use client'
 
 import { Suspense } from 'react'
@@ -19,6 +19,8 @@ function VendorDashboard() {
   const [pendingApps, setPendingApps] = useState<any[]>([])
   const [stats, setStats] = useState({ revenue: 0, sales: 0, products: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [actionError, setActionError] = useState('')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,7 +54,7 @@ function VendorDashboard() {
         supabase.from('products').select('id, title, status, commission_rate, total_conversions, total_revenue').eq('vendor_id', session.user.id).order('created_at', { ascending: false }).limit(5),
         supabase.from('conversions').select('id, sale_amount, commission_amount, platform_fee, status, converted_at, profiles!affiliate_id(full_name), products(title)').eq('vendor_id', session.user.id).order('converted_at', { ascending: false }).limit(8),
         ids.length > 0
-          ? supabase.from('affiliate_applications').select('id, applied_at, profiles!affiliate_id(full_name), products(title)').eq('status', 'pending').in('product_id', ids).order('applied_at', { ascending: false }).limit(5)
+          ? supabase.from('affiliate_applications').select('id, applied_at, profiles!affiliate_id(full_name, email), products(title)').eq('status', 'pending').in('product_id', ids).order('applied_at', { ascending: false }).limit(10)
           : Promise.resolve({ data: [] }),
       ])
 
@@ -73,16 +75,35 @@ function VendorDashboard() {
     load()
   }, [])
 
-  async function handleApprove(appId: string) {
-    await supabase.from('affiliate_applications').update({ status: 'approved', reviewed_at: new Date().toISOString() }).eq('id', appId)
-    setPendingApps(prev => prev.filter(a => a.id !== appId))
-    setStats(prev => ({ ...prev, pending: prev.pending - 1 }))
-  }
+  // ── Approve / Decline — calls API which creates the affiliate link ──────────
+  async function handleAction(appId: string, action: 'approved' | 'rejected') {
+    setActionLoading(appId)
+    setActionError('')
 
-  async function handleDecline(appId: string) {
-    await supabase.from('affiliate_applications').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', appId)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+
+    const res = await fetch('/api/affiliate/approve', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ application_id: appId, action }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok || !data.ok) {
+      setActionError(data.error ?? 'Failed to update application')
+      setActionLoading(null)
+      return
+    }
+
+    // Remove from pending list optimistically
     setPendingApps(prev => prev.filter(a => a.id !== appId))
     setStats(prev => ({ ...prev, pending: prev.pending - 1 }))
+    setActionLoading(null)
   }
 
   if (loading) return (
@@ -94,16 +115,15 @@ function VendorDashboard() {
   const profileInitial = profile?.full_name?.charAt(0)?.toUpperCase() ?? 'V'
   const isNewVendor = products.length === 0
 
-  // Checklist state
   const hasBusinessName = !!(profile?.business_name)
   const hasProduct = products.length > 0
   const hasApprovedAffiliate = conversions.length > 0
   const checklistDone = hasBusinessName && hasProduct && hasApprovedAffiliate
   const checklistSteps = [
-    { done: true,             label: 'Create your vendor account',   href: null },
-    { done: hasBusinessName,  label: 'Add your business name',        href: '/vendor/settings', cta: 'Go to Settings' },
-    { done: hasProduct,       label: 'List your first product',       href: '/vendor/products/new', cta: 'List a product' },
-    { done: hasApprovedAffiliate, label: 'Get your first affiliate sale', href: null, cta: null, sub: 'Share your marketplace link to attract affiliates' },
+    { done: true,                 label: 'Create your vendor account',    href: null,                    cta: null },
+    { done: hasBusinessName,      label: 'Add your business name',         href: '/vendor/settings',      cta: 'Go to Settings' },
+    { done: hasProduct,           label: 'List your first product',        href: '/vendor/products/new',  cta: 'List a product' },
+    { done: hasApprovedAffiliate, label: 'Get your first affiliate sale',  href: null,                    cta: null, sub: 'Share your marketplace link to attract affiliates' },
   ]
   const completedCount = checklistSteps.filter(s => s.done).length
 
@@ -140,7 +160,14 @@ function VendorDashboard() {
           ✓ Free to list · 10% platform fee on confirmed affiliate sales only
         </div>
 
-        {/* ── Getting Started Checklist — shown until all steps complete ── */}
+        {/* Action error */}
+        {actionError && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', fontSize: '13px', color: '#dc2626' }}>
+            {actionError}
+          </div>
+        )}
+
+        {/* Getting started checklist */}
         {!checklistDone && (
           <div style={{ background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.5rem', marginBottom: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -148,48 +175,24 @@ function VendorDashboard() {
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#0d0d0d' }}>Getting started</div>
                 <div style={{ fontSize: '12px', color: '#888', marginTop: '0.2rem' }}>{completedCount} of {checklistSteps.length} steps complete</div>
               </div>
-              {/* Progress bar */}
               <div style={{ width: '120px', height: '4px', background: '#f2f0ec', borderRadius: '2px', overflow: 'hidden' }}>
                 <div style={{ height: '100%', background: '#0d0d0d', borderRadius: '2px', width: `${(completedCount / checklistSteps.length) * 100}%`, transition: 'width 0.4s ease' }} />
               </div>
             </div>
-
-            <div>
-              {checklistSteps.map((step, i) => (
-                <div key={i} className="checklist-step">
-                  {/* Check circle */}
-                  <div style={{
-                    width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0, marginTop: '1px',
-                    background: step.done ? '#0d0d0d' : '#f2f0ec',
-                    border: step.done ? 'none' : '1.5px solid #d0cdc8',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {step.done && (
-                      <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="#ffffff" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-
-                  {/* Label + CTA */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: step.done ? 400 : 500, color: step.done ? '#888' : '#0d0d0d', textDecoration: step.done ? 'line-through' : 'none' }}>
-                      {step.label}
-                    </div>
-                    {step.sub && !step.done && (
-                      <div style={{ fontSize: '12px', color: '#888', marginTop: '0.15rem' }}>{step.sub}</div>
-                    )}
-                  </div>
-
-                  {/* CTA link */}
-                  {!step.done && step.href && step.cta && (
-                    <Link href={step.href} style={{ fontSize: '12px', fontWeight: 600, color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.3rem 0.75rem', borderRadius: '3px', textDecoration: 'none', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                      {step.cta}
-                    </Link>
-                  )}
+            {checklistSteps.map((step, i) => (
+              <div key={i} className="checklist-step">
+                <div style={{ width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0, marginTop: '1px', background: step.done ? '#0d0d0d' : '#f2f0ec', border: step.done ? 'none' : '1.5px solid #d0cdc8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {step.done && <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="#ffffff" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                 </div>
-              ))}
-            </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: step.done ? 400 : 500, color: step.done ? '#888' : '#0d0d0d', textDecoration: step.done ? 'line-through' : 'none' }}>{step.label}</div>
+                  {(step as any).sub && !step.done && <div style={{ fontSize: '12px', color: '#888', marginTop: '0.15rem' }}>{(step as any).sub}</div>}
+                </div>
+                {!step.done && step.href && step.cta && (
+                  <Link href={step.href} style={{ fontSize: '12px', fontWeight: 600, color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.3rem 0.75rem', borderRadius: '3px', textDecoration: 'none', flexShrink: 0, whiteSpace: 'nowrap' }}>{step.cta}</Link>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
@@ -243,6 +246,7 @@ function VendorDashboard() {
             ) : pendingApps.map(a => {
               const affiliate = a.profiles as any
               const product = a.products as any
+              const isActioning = actionLoading === a.id
               return (
                 <div key={a.id} style={{ padding: '0.85rem 0', borderBottom: '1px solid #f2f0ec' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -251,8 +255,20 @@ function VendorDashboard() {
                       <div style={{ fontSize: '11px', color: '#888' }}>{product?.title ?? '—'} · {new Date(a.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
                     </div>
                     <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
-                      <button onClick={() => handleApprove(a.id)} style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', border: 'none', padding: '0.3rem 0.75rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>Approve</button>
-                      <button onClick={() => handleDecline(a.id)} style={{ fontSize: '12px', color: '#888', background: 'none', border: '1px solid #e8e6e2', padding: '0.3rem 0.75rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>Decline</button>
+                      <button
+                        onClick={() => handleAction(a.id, 'approved')}
+                        disabled={isActioning}
+                        style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', background: isActioning ? '#888' : '#0d0d0d', border: 'none', padding: '0.3rem 0.75rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {isActioning ? '…' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => handleAction(a.id, 'rejected')}
+                        disabled={isActioning}
+                        style={{ fontSize: '12px', color: '#888', background: 'none', border: '1px solid #e8e6e2', padding: '0.3rem 0.75rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        Decline
+                      </button>
                     </div>
                   </div>
                 </div>

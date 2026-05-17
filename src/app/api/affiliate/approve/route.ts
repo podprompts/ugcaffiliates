@@ -1,9 +1,6 @@
 // src/app/api/affiliate/approve/route.ts
-//
 // Approves or rejects an affiliate application.
-// On approval: creates affiliate_links row, generates tracking code, notifies affiliate.
-// Schema: affiliate_links uses `code`, `click_count`, `conversion_count`, `total_sales`
-//         commission_rate stored as integer percent (e.g. 20 = 20%)
+// On approval: creates affiliate_links row with tracking_code set correctly.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
@@ -11,7 +8,6 @@ import { customAlphabet } from 'nanoid'
 
 export const runtime = 'nodejs'
 
-// 8-char URL-safe codes, no lookalike characters
 const nanoid = customAlphabet('abcdefghjkmnpqrstuvwxyz23456789', 8)
 
 function json(data: object, status = 200) {
@@ -39,13 +35,12 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { application_id, action } = body // action: 'approved' | 'rejected'
+    const { application_id, action } = body
 
     if (!application_id || !['approved', 'rejected'].includes(action)) {
       return json({ error: 'application_id and action (approved|rejected) required' }, 400)
     }
 
-    // Fetch application with product + affiliate info
     const { data: application, error: appError } = await supabase
       .from('affiliate_applications')
       .select(`
@@ -75,7 +70,6 @@ export async function POST(req: NextRequest) {
 
     const product = application.products as any
 
-    // Vendor can only action their own products
     if (callerProfile.role === 'vendor' && product.vendor_id !== user.id) {
       return json({ error: 'Forbidden' }, 403)
     }
@@ -89,47 +83,58 @@ export async function POST(req: NextRequest) {
       // Check if link already exists (idempotent)
       const { data: existingLink } = await supabase
         .from('affiliate_links')
-        .select('id, code')
+        .select('id, tracking_code, code')
         .eq('affiliate_id', application.affiliate_id)
         .eq('product_id', application.product_id)
-        .single()
+        .maybeSingle()
 
-      let code: string
+      let trackingCode: string
 
       if (existingLink) {
-        code = existingLink.code
+        // Use whichever code column is populated
+        trackingCode = existingLink.tracking_code || existingLink.code
+        // Ensure tracking_code is set if it wasn't
+        if (!existingLink.tracking_code && existingLink.code) {
+          await supabase
+            .from('affiliate_links')
+            .update({ tracking_code: existingLink.code })
+            .eq('id', existingLink.id)
+        }
       } else {
-        // Generate unique code
-        code = nanoid()
+        // Generate unique tracking code
+        trackingCode = nanoid()
         let attempts = 0
         while (attempts < 5) {
           const { data: clash } = await supabase
             .from('affiliate_links')
             .select('id')
-            .eq('tracking_code', code)
-            .single()
+            .eq('tracking_code', trackingCode)
+            .maybeSingle()
           if (!clash) break
-          code = nanoid()
+          trackingCode = nanoid()
           attempts++
         }
 
-        // commission_rate stored as integer percent in affiliate_links
-        // product.commission_rate may be decimal (0.20) — convert to percent
-        const commissionPct = product.commission_rate > 1
-          ? product.commission_rate           // already a percent integer
-          : Math.round(product.commission_rate * 100) // convert 0.20 → 20
+        // commission_rate: normalize to decimal (0.20 not 20)
+        const commissionDecimal = product.commission_rate > 1
+          ? product.commission_rate / 100
+          : product.commission_rate
+
+        const shortUrl = `https://ugcaffiliates.com/go/${trackingCode}`
 
         const { error: linkError } = await supabase
           .from('affiliate_links')
           .insert({
-            code,
+            tracking_code:    trackingCode,
+            code:             trackingCode, // keep both in sync
+            short_url:        shortUrl,
             affiliate_id:     application.affiliate_id,
             product_id:       application.product_id,
             vendor_id:        product.vendor_id,
-            commission_rate:  commissionPct,
-            click_count:      0,
-            conversion_count: 0,
-            total_sales:      0,
+            commission_rate:  commissionDecimal,
+            total_clicks:     0,
+            total_conversions: 0,
+            total_earned:     0,
             is_active:        true,
           })
 
@@ -139,7 +144,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const shortUrl = `https://ugcaffiliates.com/go/${code}`
+      const shortUrl = `https://ugcaffiliates.com/go/${trackingCode}`
 
       // Update application status
       await supabase
@@ -157,7 +162,8 @@ export async function POST(req: NextRequest) {
         read:       false,
       })
 
-      return json({ ok: true, status: 'approved', code, short_url: shortUrl })
+      console.log(`[approve] approved — tracking_code: ${trackingCode} | url: ${shortUrl}`)
+      return json({ ok: true, status: 'approved', tracking_code: trackingCode, short_url: shortUrl })
     }
 
     // ── REJECT ───────────────────────────────────────────────────────────────

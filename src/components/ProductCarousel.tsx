@@ -1,8 +1,9 @@
 'use client'
 
 // src/components/ProductCarousel.tsx
-// Smooth infinite-loop carousel with momentum, fluid mobile swipe,
-// and a subtle image parallax "lock" effect on scroll.
+// Mobile: 100% native browser scroll — buttery smooth, no JS interference.
+// Desktop: JS drag with momentum.
+// Both: subtle image parallax on scroll.
 
 import { useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
@@ -19,15 +20,15 @@ interface Product {
 }
 
 export default function ProductCarousel({ products }: { products: Product[] }) {
-  const trackRef   = useRef<HTMLDivElement>(null)
-  const isDragging = useRef(false)
-  const startX     = useRef(0)
+  const trackRef    = useRef<HTMLDivElement>(null)
+  const isDragging  = useRef(false)
+  const startX      = useRef(0)
   const startScroll = useRef(0)
-  const velocity   = useRef(0)
-  const lastX      = useRef(0)
-  const lastTime   = useRef(0)
-  const rafId      = useRef<number | null>(null)
-  const isTouching = useRef(false)
+  const velocity    = useRef(0)
+  const lastX       = useRef(0)
+  const lastTime    = useRef(0)
+  const rafId       = useRef<number | null>(null)
+  const isMobile    = useRef(false)
   const n = products.length
 
   const CLONES = 3
@@ -45,6 +46,12 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     return card.offsetWidth + 16
   }
 
+  // Detect mobile once on mount
+  useEffect(() => {
+    isMobile.current = window.matchMedia('(pointer: coarse)').matches
+  }, [])
+
+  // Seamless infinite loop — fires on native scroll too
   const checkLoop = useCallback(() => {
     const el = trackRef.current
     if (!el) return
@@ -59,7 +66,7 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     }
   }, [n])
 
-  // Parallax image lock — images shift slightly opposite to scroll direction
+  // Subtle parallax — images shift slightly opposite to scroll
   const updateParallax = useCallback(() => {
     const el = trackRef.current
     if (!el) return
@@ -72,20 +79,29 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
       const cardCenter = cardRect.left + cardRect.width / 2
       const trackCenter = trackRect.left + trackRect.width / 2
       const offset = (cardCenter - trackCenter) / trackRect.width
-      // Subtle parallax: max ±8% shift
-      const shift = offset * -8
+      const shift = offset * -6
       img.style.transform = `translateX(${shift}%) scale(1.08)`
     })
   }, [])
 
+  // Set initial scroll + wire native scroll listener
   useEffect(() => {
     const el = trackRef.current
     if (!el) return
     const step = getStep()
     if (step) el.scrollLeft = CLONES * step
     updateParallax()
-  }, [updateParallax])
 
+    // Native scroll listener handles loop + parallax for mobile
+    const onScroll = () => {
+      checkLoop()
+      updateParallax()
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [checkLoop, updateParallax])
+
+  // Desktop momentum after drag release
   const momentum = useCallback(() => {
     const el = trackRef.current
     if (!el) return
@@ -102,8 +118,10 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     rafId.current = requestAnimationFrame(momentum)
   }, [checkLoop, updateParallax])
 
-  // ── Mouse drag ──────────────────────────────────────────────────────────────
+  // ── Desktop mouse drag only ───────────────────────────────────────────────
   const onMouseDown = (e: React.MouseEvent) => {
+    // Skip on mobile — native touch handles it
+    if (isMobile.current) return
     if (rafId.current) cancelAnimationFrame(rafId.current)
     const el = trackRef.current!
     isDragging.current = true
@@ -128,8 +146,6 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
       lastX.current = e.pageX
       lastTime.current = now
       el.scrollLeft = startScroll.current + (startX.current - e.pageX)
-      checkLoop()
-      updateParallax()
     }
 
     const onMouseUp = () => {
@@ -146,50 +162,7 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [checkLoop, momentum, updateParallax])
-
-  // ── Touch ───────────────────────────────────────────────────────────────────
-  const onTouchStart = (e: React.TouchEvent) => {
-    if (rafId.current) cancelAnimationFrame(rafId.current)
-    const el = trackRef.current!
-    isTouching.current = true
-    isDragging.current = true
-    startX.current = e.touches[0].clientX
-    startScroll.current = el.scrollLeft
-    lastX.current = e.touches[0].clientX
-    lastTime.current = performance.now()
-    velocity.current = 0
-  }
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging.current) return
-    // Only handle horizontal swipes — let vertical scroll through
-    const dx = Math.abs(e.touches[0].clientX - startX.current)
-    const dy = Math.abs(e.touches[0].clientY - (e.touches[0].clientY))
-    if (dy > dx) return
-
-    const el = trackRef.current!
-    const now = performance.now()
-    const dt = now - lastTime.current
-    const currentX = e.touches[0].clientX
-
-    if (dt > 0) {
-      velocity.current = (lastX.current - currentX) / dt * 16
-    }
-    lastX.current = currentX
-    lastTime.current = now
-    el.scrollLeft = startScroll.current + (startX.current - currentX)
-    checkLoop()
-    updateParallax()
-  }
-
-  const onTouchEnd = () => {
-    isTouching.current = false
-    isDragging.current = false
-    // Give a little extra momentum boost on mobile for that fluid feel
-    velocity.current *= 1.4
-    rafId.current = requestAnimationFrame(momentum)
-  }
+  }, [momentum])
 
   if (!n) return null
 
@@ -205,10 +178,13 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
           padding: 0 2.5rem;
           cursor: grab;
           will-change: scroll-position;
+          /* Native momentum on iOS */
           -webkit-overflow-scrolling: touch;
-          touch-action: pan-x;
+          /* Tell browser: this scrolls horizontally, don't intercept */
+          overscroll-behavior-x: contain;
         }
         .pc-track::-webkit-scrollbar { display: none; }
+
         .pc-card {
           flex-shrink: 0;
           width: calc(30% - 8px);
@@ -234,25 +210,39 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
           position: absolute;
           top: -4%;
           left: -4%;
-          transition: transform 0.05s linear;
           will-change: transform;
+          transform: translateX(0%) scale(1.08);
         }
-        .pc-card:hover .pc-title { text-decoration: underline; text-underline-offset: 2px; }
+        .pc-card:hover .pc-title {
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+
         @media (max-width: 1024px) { .pc-card { width: calc(45% - 8px); } }
-        @media (max-width: 768px)  {
-          .pc-track { gap: 12px; padding: 0 1rem; touch-action: pan-x; }
-          .pc-card { width: calc(72% - 6px); }
+        @media (max-width: 768px) {
+          .pc-track {
+            gap: 12px;
+            padding: 0 1.25rem;
+            /* Snap to cards on mobile for crisp feel */
+            scroll-snap-type: x mandatory;
+            scroll-padding: 0 1.25rem;
+          }
+          .pc-card {
+            width: calc(78% - 6px);
+            /* Each card snaps into place */
+            scroll-snap-align: start;
+          }
         }
-        @media (max-width: 480px)  { .pc-card { width: calc(84% - 6px); } }
+        @media (max-width: 480px) {
+          .pc-card { width: calc(86% - 6px); }
+        }
       `}</style>
 
       <div
         ref={trackRef}
         className="pc-track"
         onMouseDown={onMouseDown}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        // No touch handlers — browser handles it natively
       >
         {items.map((p, idx) => {
           const vendor      = p.profiles as any
@@ -283,7 +273,9 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
                 ) : (
                   <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>No image</span>
                 )}
-                <div style={{ position: 'absolute', bottom: '8px', left: '8px', background: '#0d0d0d', color: '#fff', fontSize: '10.5px', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '2px', zIndex: 1 }}>{commPct}% commission</div>
+                <div style={{ position: 'absolute', bottom: '8px', left: '8px', background: '#0d0d0d', color: '#fff', fontSize: '10.5px', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '2px', zIndex: 1 }}>
+                  {commPct}% commission
+                </div>
               </div>
               <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '11px', fontWeight: 500, color: '#888', marginBottom: '0.2rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{displayName}</div>
               <div className="pc-title" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', marginBottom: '0.3rem', lineHeight: 1.35 }}>{p.title}</div>
