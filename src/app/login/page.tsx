@@ -2,18 +2,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
+import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const confirmed = searchParams.get('confirmed') === 'true'
+  const authError = searchParams.get('error')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,16 +34,15 @@ export default function LoginPage() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, stripe_onboarded')
+      .select('role')
       .eq('id', data.user.id)
       .single()
 
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    const dest = profile?.role === 'vendor'
-      ? (profile?.stripe_onboarded ? '/vendor' : '/pricing')
-      : profile?.role === 'admin' ? '/admin'
-      : '/affiliate'
+    // stripe_onboarded check removed — vendors list for free now
+    const dest =
+      profile?.role === 'vendor'   ? '/vendor'    :
+      profile?.role === 'admin'    ? '/admin'     :
+      '/affiliate'
 
     window.location.href = dest
   }
@@ -48,6 +52,13 @@ export default function LoginPage() {
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` }
     })
+  }
+
+  const inputStyle = {
+    width: '100%', padding: '0.7rem 1rem', border: '1px solid #e8e6e2',
+    borderRadius: '3px', fontSize: '14px', fontFamily: 'inherit',
+    color: '#0d0d0d', background: '#ffffff', outline: 'none',
+    boxSizing: 'border-box' as const,
   }
 
   return (
@@ -70,6 +81,28 @@ export default function LoginPage() {
       </nav>
 
       <div className="login-wrap">
+
+        {/* ── Email confirmed banner ── */}
+        {confirmed && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5} style={{ flexShrink: 0, marginTop: '1px' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#16a34a', marginBottom: '0.2rem' }}>Email confirmed!</div>
+              <div style={{ fontSize: '13px', color: '#166534' }}>Your account is ready. Sign in below to get started.</div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Auth error banner ── */}
+        {authError && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', padding: '1rem 1.25rem', marginBottom: '1.5rem', fontSize: '13px', color: '#dc2626' }}>
+            Authentication failed. Please try again or{' '}
+            <Link href="/signup" style={{ color: '#dc2626', fontWeight: 600 }}>create a new account</Link>.
+          </div>
+        )}
+
         <div style={{ textAlign: 'center' as const, marginBottom: '2rem' }}>
           <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2.25rem', fontWeight: 500, marginBottom: '0.4rem' }}>Sign in</h1>
           <p style={{ fontSize: '13.5px', color: '#888' }}>Welcome back.</p>
@@ -78,17 +111,19 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column' as const, gap: '1rem' }}>
           <div>
             <label style={{ display: 'block' as const, fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#3a3a3a', marginBottom: '0.4rem' }}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com" required style={{ width: '100%', padding: '0.7rem 1rem', border: '1px solid #e8e6e2', borderRadius: '3px', fontSize: '14px', fontFamily: 'inherit', color: '#0d0d0d', background: '#ffffff', outline: 'none', boxSizing: 'border-box' as const }} />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@example.com" required style={inputStyle} />
           </div>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
               <label style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#3a3a3a' }}>Password</label>
               <Link href="/forgot-password" style={{ fontSize: '12px', color: '#888', textDecoration: 'underline', textUnderlineOffset: '2px' }}>Forgot?</Link>
             </div>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" required style={{ width: '100%', padding: '0.7rem 1rem', border: '1px solid #e8e6e2', borderRadius: '3px', fontSize: '14px', fontFamily: 'inherit', color: '#0d0d0d', background: '#ffffff', outline: 'none', boxSizing: 'border-box' as const }} />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" required style={inputStyle} />
           </div>
 
-          {error && <div style={{ fontSize: '13px', color: '#c0392b', padding: '0.75rem 1rem', background: '#fdf2f2', borderRadius: '3px', border: '1px solid #f5c6cb' }}>{error}</div>}
+          {error && (
+            <div style={{ fontSize: '13px', color: '#c0392b', padding: '0.75rem 1rem', background: '#fdf2f2', borderRadius: '3px', border: '1px solid #f5c6cb' }}>{error}</div>
+          )}
 
           <button type="submit" disabled={loading} style={{ width: '100%', padding: '0.85rem', background: loading ? '#888' : '#0d0d0d', color: '#ffffff', fontSize: '14px', fontWeight: 600, border: 'none', borderRadius: '3px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
             {loading ? 'Signing in...' : 'Sign in'}
@@ -112,5 +147,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f9f8f6' }} />}>
+      <LoginForm />
+    </Suspense>
   )
 }
