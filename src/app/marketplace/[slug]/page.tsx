@@ -108,7 +108,7 @@ function ImageGallery({ images }: { images: string[] }) {
         .ig-dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 2; }
         .ig-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.5); transition: all 0.25s; cursor: pointer; border: none; padding: 0; }
         .ig-dot.active { background: #ffffff; width: 18px; border-radius: 3px; }
-        .ig-thumb-row { display: flex; gap: 8px; margin-top: 0.75rem; overflow-x: auto; scrollbar-width: none; }
+        .ig-thumb-row { display: flex; gap: 8px; margin-top: 0.75rem; margin-bottom: 2rem; overflow-x: auto; scrollbar-width: none; }
         .ig-thumb-row::-webkit-scrollbar { display: none; }
         .ig-thumb { flex-shrink: 0; width: 64px; height: 64px; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s, opacity 0.15s; opacity: 0.6; }
         .ig-thumb.active { border-color: #0d0d0d; opacity: 1; }
@@ -339,6 +339,44 @@ export default function ProductDetailPage() {
         <div>
           {/* Image gallery — public */}
           {images.length > 0 && <ImageGallery images={images} />}
+          {/* Product image downloads — approved affiliates only */}
+{images.length > 0 && (
+  <div style={{ marginBottom: '2.5rem' }}>
+    <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '0.75rem' }}>Product images</div>
+    {isApprovedAffiliate ? (
+      <div style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem' }}>
+        <div style={{ fontSize: '13px', color: '#3a3a3a', marginBottom: '1rem', lineHeight: 1.6 }}>
+          Download high-resolution product images for your content.
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {images.map((img, i) => (
+            <a key={i} href={img} download target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#0d0d0d', color: '#ffffff', fontSize: '12px', fontWeight: 600, padding: '0.45rem 0.85rem', borderRadius: '3px', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Image {i + 1}
+            </a>
+          ))}
+        </div>
+      </div>
+    ) : (
+      <div style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ fontSize: '20px' }}>🔒</div>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>High-res images available</div>
+          <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
+            {!loggedIn ? (
+              <><Link href="/signup" style={{ color: '#0d0d0d', fontWeight: 600 }}>Sign up</Link> and apply to download product images</>
+            ) : !applied ? (
+              'Apply to promote this product to download high-res images'
+            ) : (
+              'You\'ll get access to download images once your application is approved'
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
           {/* YouTube embed — public (it's public YouTube anyway) */}
           {embedUrl && (

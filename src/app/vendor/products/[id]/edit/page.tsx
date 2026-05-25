@@ -147,14 +147,33 @@ export default function VendorEditProductPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setVideoUploading(true); setVideoProgress(0); setError('')
+
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('type', 'video')
-
     try {
+      // Step 1 — Get presigned URL (bypasses Vercel 4.5MB limit)
+      const presignRes = await fetch('/api/upload/presign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          filename:    file.name,
+          contentType: file.type || 'video/mp4',
+          type:        'video',
+        }),
+      })
+
+      if (!presignRes.ok) {
+        const err = await presignRes.json()
+        throw new Error(err.error ?? 'Failed to get upload URL')
+      }
+
+      const { presignedUrl, publicUrl } = await presignRes.json()
+
+      // Step 2 — Upload directly to R2
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.upload.onprogress = ev => {
@@ -162,28 +181,26 @@ export default function VendorEditProductPage() {
         }
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const data = JSON.parse(xhr.responseText)
-              if (data.url) { setVideoUrl(data.url); setVideoName(file.name); resolve() }
-              else reject(new Error(data.error ?? 'Upload failed'))
-            } catch { reject(new Error('Invalid response')) }
+            setVideoUrl(publicUrl); setVideoName(file.name); resolve()
           } else {
-            try { reject(new Error(JSON.parse(xhr.responseText).error ?? `Upload failed (${xhr.status})`)) }
-            catch { reject(new Error(`Upload failed (${xhr.status})`)) }
+            reject(new Error(`Upload failed (${xhr.status})`))
           }
         }
-        xhr.onerror = () => reject(new Error('Network error'))
-        xhr.open('POST', '/api/upload')
-        xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`)
-        xhr.send(fd)
+        xhr.onerror = () => reject(new Error('Network error during upload'))
+        xhr.open('PUT', presignedUrl)
+        xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
+        xhr.send(file)
       })
+
     } catch (err: any) {
       setError(err.message ?? 'Video upload failed')
     }
 
-    setVideoUploading(false); setVideoProgress(0)
+    setVideoUploading(false)
+    setVideoProgress(0)
     if (videoInputRef.current) videoInputRef.current.value = ''
   }
+
 
   function removeVideo() {
     setVideoUrl(''); setVideoName('')
