@@ -1,14 +1,11 @@
 // src/app/vendor/success/page.tsx
 'use client'
-
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-
 export const dynamic = 'force-dynamic'
 
 export default function VendorSuccessPage() {
   const [show, setShow] = useState(false)
-
   useEffect(() => {
     setTimeout(() => setShow(true), 100)
   }, [])
@@ -30,22 +27,37 @@ export default function VendorSuccessPage() {
           <div style={{ width: '56px', height: '56px', background: '#0d0d0d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.75rem', fontSize: '22px', color: '#ffffff' }}>
             ✓
           </div>
+
           <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2.5rem', fontWeight: 500, marginBottom: '1rem', color: '#0d0d0d' }}>
             You're all set.
           </h1>
+
           <p style={{ fontSize: '14px', color: '#3a3a3a', lineHeight: 1.75, marginBottom: '0.75rem' }}>
             Your vendor account is ready. List your first product and start reaching thousands of motivated creators today.
           </p>
           <p style={{ fontSize: '13px', color: '#888', marginBottom: '2.5rem' }}>
-            Listing is free. We only take a small 4% fee on confirmed affiliate sales — you pay nothing until you make money.
+            Listing is free. We only take a 10% platform fee on confirmed affiliate sales — you pay nothing until you make money.
           </p>
+
           <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '0.75rem' }}>
             <Link href="/vendor/products/new" style={{ display: 'block', background: '#0d0d0d', color: '#ffffff', fontSize: '14px', fontWeight: 600, padding: '0.85rem 2rem', borderRadius: '3px', textDecoration: 'none' }}>
               List your first product →
             </Link>
+            {/* Step 2: Set up tracking so conversions actually get recorded */}
+            <Link href="/vendor/integration" style={{ display: 'block', background: '#ffffff', color: '#0d0d0d', fontSize: '14px', fontWeight: 500, padding: '0.85rem 2rem', borderRadius: '3px', textDecoration: 'none', border: '1px solid #e8e6e2' }}>
+              Set up conversion tracking →
+            </Link>
             <Link href="/vendor" style={{ display: 'block', fontSize: '13px', color: '#888', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
               Go to dashboard
             </Link>
+          </div>
+
+          {/* Gentle nudge explaining why tracking matters */}
+          <div style={{ marginTop: '2rem', padding: '1rem 1.25rem', background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', textAlign: 'left' as const }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#0d0d0d', marginBottom: '0.3rem' }}>Why tracking matters</div>
+            <div style={{ fontSize: '12px', color: '#888', lineHeight: 1.6 }}>
+              Without the tracking pixel or postback URL installed on your store, affiliate sales won't be recorded and commissions won't be credited. Takes 5 minutes to set up.
+            </div>
           </div>
         </div>
       </div>

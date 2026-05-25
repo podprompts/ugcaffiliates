@@ -72,7 +72,7 @@ export default function VendorSignupPage() {
         <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', marginTop: '1rem' }}>No credit card required · No monthly fees · Cancel anytime</div>
       </div>
 
-      {/* Features — no emojis, clean SVG icons */}
+      {/* Features */}
       <div className="vs-features">
         {[
           {

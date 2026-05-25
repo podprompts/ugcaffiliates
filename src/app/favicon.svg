@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#0a0a0a"/>
+  <!-- Left stem -->
+  <rect x="116" y="96" width="80" height="240" rx="6" fill="#f0ede6"/>
+  <!-- Right stem -->
+  <rect x="316" y="96" width="80" height="240" rx="6" fill="#f0ede6"/>
+  <!-- Bottom curve/base -->
+  <rect x="116" y="296" width="280" height="80" rx="40" fill="#f0ede6"/>
+</svg>

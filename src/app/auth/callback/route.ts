@@ -1,19 +1,14 @@
-\// src/app/auth/callback/route.ts
-// Handles Supabase auth callbacks:
-// - Email confirmation (token_hash) → /login?confirmed=true
-// - Google OAuth (code) → role-based dashboard redirect
-// - Password reset (code + type=recovery) → /reset-password
-
+// src/app/auth/callback/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
-  const code       = searchParams.get('code')
-  const tokenHash  = searchParams.get('token_hash')
-  const type       = searchParams.get('type')
-  const role       = searchParams.get('role')
+  const code      = searchParams.get('code')
+  const tokenHash = searchParams.get('token_hash')
+  const type      = searchParams.get('type')
+  const role      = searchParams.get('role')
 
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -33,20 +28,21 @@ export async function GET(req: NextRequest) {
   )
 
   // ── Email confirmation via token_hash ─────────────────────────────────────
-  // Fired when user clicks the confirm email link from signup
   if (tokenHash && type === 'signup') {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type: 'signup',
     })
     if (error) {
-      console.error('[callback] token_hash verify error:', error)
+      console.error('[callback] token_hash verify error:', error.message)
       return NextResponse.redirect(`${origin}/login?error=auth_failed`)
     }
+    // Sign out immediately so user must log in manually
+    await supabase.auth.signOut()
     return NextResponse.redirect(`${origin}/login?confirmed=true`)
   }
 
-  // ── No code and no token_hash — bail ─────────────────────────────────────
+  // ── No code and no token_hash ─────────────────────────────────────────────
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
@@ -57,23 +53,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${origin}/reset-password`)
   }
 
-  // ── Google OAuth / general code exchange ─────────────────────────────────
+  // ── Google OAuth ──────────────────────────────────────────────────────────
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error || !data.user) {
-    console.error('[callback] code exchange error:', error)
+    console.error('[callback] code exchange error:', error?.message)
     return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
 
-  // If role was passed (Google signup), set it on the profile
   if (role && (role === 'vendor' || role === 'affiliate')) {
-    await supabase
-      .from('profiles')
-      .update({ role })
-      .eq('id', data.user.id)
+    await supabase.from('profiles').update({ role }).eq('id', data.user.id)
   }
 
-  // Get profile role to redirect to the right dashboard
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
