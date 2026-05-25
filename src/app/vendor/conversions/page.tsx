@@ -55,6 +55,7 @@ export default function VendorConversionsPage() {
   const [busy, setBusy]                     = useState<string | null>(null)
   const [toast, setToast]                   = useState<{ msg: string; ok: boolean } | null>(null)
   const [profileInitial, setProfileInitial] = useState('V')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [vendorId, setVendorId]             = useState<string | null>(null)
   const [session, setSession]               = useState<any>(null)
   const [hasPaymentMethod, setHasPaymentMethod] = useState<boolean | null>(null)
@@ -81,6 +82,7 @@ export default function VendorConversionsPage() {
       }
 
       setProfileInitial(profile.full_name?.charAt(0)?.toUpperCase() ?? 'V')
+      setIsAdmin(profile.role === 'admin')
       setVendorId(sess.user.id)
 
       // Check vendor payment method
@@ -106,7 +108,7 @@ export default function VendorConversionsPage() {
       `)
       .order('converted_at', { ascending: false })
 
-    if (vid) query = query.eq('vendor_id', vid)
+    if (vid && !isAdmin) query = query.eq("vendor_id", vid)
 
     const { data, error } = await query
 

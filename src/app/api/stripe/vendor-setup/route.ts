@@ -1,6 +1,5 @@
 // src/app/api/stripe/vendor-setup/route.ts
 // Creates a Stripe Customer for the vendor and returns a SetupIntent
-// so they can save a card for automatic platform fee charges
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
@@ -8,9 +7,7 @@ import { createServiceClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-03-31.basil' as any,
-})
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,27 +31,21 @@ export async function POST(req: NextRequest) {
 
     let customerId = profile.stripe_customer_id
 
-    // Create Stripe customer if doesn't exist
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        name: profile.full_name ?? undefined,
+        name:  profile.full_name ?? undefined,
         metadata: { ugca_user_id: user.id },
       })
       customerId = customer.id
-
-      await supabase
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id)
+      await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id)
     }
 
-    // Create SetupIntent for saving card
     const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
+      customer:             customerId,
       payment_method_types: ['card'],
-      usage: 'off_session',
-      metadata: { ugca_user_id: user.id },
+      usage:                'off_session',
+      metadata:             { ugca_user_id: user.id },
     })
 
     return NextResponse.json({
@@ -63,12 +54,11 @@ export async function POST(req: NextRequest) {
       publishable_key: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     })
   } catch (err: any) {
-    console.error('[vendor-setup] error:', err)
+    console.error('[vendor-setup POST] error:', err)
     return NextResponse.json({ error: err.message ?? 'Failed to setup payment' }, { status: 500 })
   }
 }
 
-// Get vendor payment method status
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get('authorization')
@@ -91,7 +81,7 @@ export async function GET(req: NextRequest) {
 
     const paymentMethods = await stripe.paymentMethods.list({
       customer: profile.stripe_customer_id,
-      type: 'card',
+      type:     'card',
     })
 
     const pm = paymentMethods.data[0]
@@ -99,10 +89,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       has_payment_method: !!pm,
       card: pm ? {
-        brand: pm.card?.brand,
-        last4: pm.card?.last4,
+        brand:     pm.card?.brand,
+        last4:     pm.card?.last4,
         exp_month: pm.card?.exp_month,
-        exp_year: pm.card?.exp_year,
+        exp_year:  pm.card?.exp_year,
       } : null,
     })
   } catch (err: any) {

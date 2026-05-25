@@ -32,9 +32,9 @@ export default function AdminNav({ onSignOut }: Props) {
   function previewAs(role: 'vendor' | 'affiliate') {
     setSwitching(true)
     setOpen(false)
-    // Store a flag so VendorNav/AffiliateNav can show "Back to Admin"
     localStorage.setItem('ugca_admin_preview', '1')
-    window.location.href = role === 'vendor' ? '/vendor' : '/affiliate'
+    // Route to the correct dashboard for each role
+    window.location.href = role === 'vendor' ? '/vendor/conversions' : '/affiliate'
   }
 
   return (
