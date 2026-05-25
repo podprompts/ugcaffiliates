@@ -1,4 +1,7 @@
 // src/app/marketplace/[slug]/page.tsx
+// Commission details blurred for logged-out users
+// AI assets + MP4 video gated to approved affiliates only
+
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
@@ -21,38 +24,14 @@ function getTrendScore(id: string): number {
 function ImageGallery({ images }: { images: string[] }) {
   const trackRef = useRef<HTMLDivElement>(null)
   const [current, setCurrent] = useState(0)
-  const isDragging = useRef(false)
-  const startX = useRef(0)
-  const startScroll = useRef(0)
-  const velocity = useRef(0)
-  const lastX = useRef(0)
-  const lastTime = useRef(0)
-  const rafId = useRef<number | null>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const n = images.length
 
-  // For infinite loop: clone first and last
   const items = n > 1 ? [images[n - 1], ...images, images[0]] : images
 
   const getWidth = () => trackRef.current?.offsetWidth ?? 0
 
-  // Jump to real index without animation when hitting clones
-  const goTo = useCallback((idx: number, animated = true) => {
-    const el = trackRef.current
-    if (!el) return
-    const w = getWidth()
-    if (!animated) {
-      el.style.transition = 'none'
-      el.scrollLeft = (idx + (n > 1 ? 1 : 0)) * w
-    } else {
-      el.style.transition = 'scroll-behavior 0s'
-      el.scrollLeft = (idx + (n > 1 ? 1 : 0)) * w
-    }
-    setCurrent(idx)
-  }, [n])
-
-  // Set initial position
   useEffect(() => {
     if (!trackRef.current || n === 0) return
     const el = trackRef.current
@@ -60,20 +39,16 @@ function ImageGallery({ images }: { images: string[] }) {
     el.scrollLeft = n > 1 ? getWidth() : 0
   }, [n])
 
-  // Handle infinite loop on scroll end
   const handleScrollEnd = useCallback(() => {
     const el = trackRef.current
     if (!el || n <= 1) return
     const w = getWidth()
     const idx = Math.round(el.scrollLeft / w)
-    // Clone at start
     if (idx === 0) {
       el.style.scrollBehavior = 'auto'
       el.scrollLeft = n * w
       setCurrent(n - 1)
-    }
-    // Clone at end
-    else if (idx === n + 1) {
+    } else if (idx === n + 1) {
       el.style.scrollBehavior = 'auto'
       el.scrollLeft = w
       setCurrent(0)
@@ -89,7 +64,6 @@ function ImageGallery({ images }: { images: string[] }) {
     const onScroll = () => {
       clearTimeout(timer)
       timer = setTimeout(handleScrollEnd, 80)
-      // Update dot indicator while scrolling
       const w = getWidth()
       const idx = Math.round(el.scrollLeft / w)
       if (n > 1 && idx >= 1 && idx <= n) setCurrent(idx - 1)
@@ -98,7 +72,6 @@ function ImageGallery({ images }: { images: string[] }) {
     return () => { el.removeEventListener('scroll', onScroll); clearTimeout(timer) }
   }, [handleScrollEnd, n])
 
-  // Keyboard nav for lightbox
   useEffect(() => {
     if (!lightboxOpen) return
     const onKey = (e: KeyboardEvent) => {
@@ -123,149 +96,40 @@ function ImageGallery({ images }: { images: string[] }) {
     <>
       <style>{`
         .ig-wrap { position: relative; margin-bottom: 1.5rem; border-radius: 8px; overflow: hidden; background: #f2f0ec; }
-        .ig-track {
-          display: flex;
-          overflow-x: scroll;
-          scroll-snap-type: x mandatory;
-          scrollbar-width: none;
-          -webkit-overflow-scrolling: touch;
-        }
+        .ig-track { display: flex; overflow-x: scroll; scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
         .ig-track::-webkit-scrollbar { display: none; }
-        .ig-slide {
-          flex-shrink: 0;
-          width: 100%;
-          scroll-snap-align: start;
-          aspect-ratio: 4/3;
-          position: relative;
-          overflow: hidden;
-        }
-        .ig-slide img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          cursor: zoom-in;
-          transition: transform 0.4s ease;
-          display: block;
-        }
+        .ig-slide { flex-shrink: 0; width: 100%; scroll-snap-align: start; aspect-ratio: 4/3; position: relative; overflow: hidden; }
+        .ig-slide img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; transition: transform 0.4s ease; display: block; }
         .ig-slide img:hover { transform: scale(1.02); }
-        .ig-btn {
-          position: absolute;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.92);
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 2;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-          transition: background 0.15s, transform 0.15s;
-          backdrop-filter: blur(4px);
-        }
+        .ig-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.92); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; box-shadow: 0 2px 12px rgba(0,0,0,0.12); transition: background 0.15s, transform 0.15s; backdrop-filter: blur(4px); }
         .ig-btn:hover { background: #ffffff; transform: translateY(-50%) scale(1.08); }
-        .ig-btn-left  { left: 12px; }
+        .ig-btn-left { left: 12px; }
         .ig-btn-right { right: 12px; }
         .ig-dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 2; }
         .ig-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.5); transition: all 0.25s; cursor: pointer; border: none; padding: 0; }
         .ig-dot.active { background: #ffffff; width: 18px; border-radius: 3px; }
         .ig-thumb-row { display: flex; gap: 8px; margin-top: 0.75rem; overflow-x: auto; scrollbar-width: none; }
         .ig-thumb-row::-webkit-scrollbar { display: none; }
-        .ig-thumb {
-          flex-shrink: 0;
-          width: 64px;
-          height: 64px;
-          border-radius: 4px;
-          overflow: hidden;
-          cursor: pointer;
-          border: 2px solid transparent;
-          transition: border-color 0.15s, opacity 0.15s;
-          opacity: 0.6;
-        }
+        .ig-thumb { flex-shrink: 0; width: 64px; height: 64px; border-radius: 4px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s, opacity 0.15s; opacity: 0.6; }
         .ig-thumb.active { border-color: #0d0d0d; opacity: 1; }
         .ig-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-        /* Lightbox */
-        .ig-lightbox {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.94);
-          z-index: 1000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .ig-lightbox-img {
-          max-width: 90vw;
-          max-height: 85vh;
-          object-fit: contain;
-          border-radius: 4px;
-          user-select: none;
-        }
-        .ig-lightbox-btn {
-          position: absolute;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.2);
-          color: #ffffff;
-          font-size: 20px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.15s;
-        }
+        .ig-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.94); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .ig-lightbox-img { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 4px; user-select: none; }
+        .ig-lightbox-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #ffffff; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
         .ig-lightbox-btn:hover { background: rgba(255,255,255,0.2); }
-        .ig-lightbox-close {
-          position: absolute;
-          top: 1.25rem;
-          right: 1.25rem;
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.2);
-          color: #ffffff;
-          font-size: 18px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .ig-lightbox-counter {
-          position: absolute;
-          bottom: 1.25rem;
-          left: 50%;
-          transform: translateX(-50%);
-          font-size: 13px;
-          color: rgba(255,255,255,0.5);
-          font-family: var(--font-dm-sans), sans-serif;
-        }
+        .ig-lightbox-close { position: absolute; top: 1.25rem; right: 1.25rem; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #ffffff; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .ig-lightbox-counter { position: absolute; bottom: 1.25rem; left: 50%; transform: translateX(-50%); font-size: 13px; color: rgba(255,255,255,0.5); font-family: var(--font-dm-sans), sans-serif; }
       `}</style>
 
-      {/* Main gallery */}
       <div className="ig-wrap">
         <div ref={trackRef} className="ig-track">
           {items.map((img, i) => (
             <div key={i} className="ig-slide">
-              <img
-                src={img}
-                alt=""
-                draggable={false}
-                onClick={() => { setLightboxIndex(n > 1 ? (i === 0 ? n - 1 : i === n + 1 ? 0 : i - 1) : 0); setLightboxOpen(true) }}
-              />
+              <img src={img} alt="" draggable={false}
+                onClick={() => { setLightboxIndex(n > 1 ? (i === 0 ? n - 1 : i === n + 1 ? 0 : i - 1) : 0); setLightboxOpen(true) }} />
             </div>
           ))}
         </div>
-
-        {/* Prev/Next buttons — only if multiple images */}
         {n > 1 && (
           <>
             <button className="ig-btn ig-btn-left" onClick={() => scrollTo(-1)} aria-label="Previous">
@@ -274,56 +138,30 @@ function ImageGallery({ images }: { images: string[] }) {
             <button className="ig-btn ig-btn-right" onClick={() => scrollTo(1)} aria-label="Next">
               <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#0d0d0d" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
             </button>
-            {/* Dot indicators */}
             <div className="ig-dots">
               {images.map((_, i) => (
-                <button
-                  key={i}
-                  className={`ig-dot${current === i ? ' active' : ''}`}
-                  onClick={() => {
-                    const el = trackRef.current
-                    if (!el) return
-                    el.style.scrollBehavior = 'smooth'
-                    el.scrollLeft = (i + 1) * getWidth()
-                  }}
-                  aria-label={`Image ${i + 1}`}
-                />
+                <button key={i} className={`ig-dot${current === i ? ' active' : ''}`}
+                  onClick={() => { const el = trackRef.current; if (!el) return; el.style.scrollBehavior = 'smooth'; el.scrollLeft = (i + 1) * getWidth() }} />
               ))}
             </div>
           </>
         )}
       </div>
 
-      {/* Thumbnail strip */}
       {n > 1 && (
         <div className="ig-thumb-row">
           {images.map((img, i) => (
-            <div
-              key={i}
-              className={`ig-thumb${current === i ? ' active' : ''}`}
-              onClick={() => {
-                const el = trackRef.current
-                if (!el) return
-                el.style.scrollBehavior = 'smooth'
-                el.scrollLeft = (i + 1) * getWidth()
-              }}
-            >
+            <div key={i} className={`ig-thumb${current === i ? ' active' : ''}`}
+              onClick={() => { const el = trackRef.current; if (!el) return; el.style.scrollBehavior = 'smooth'; el.scrollLeft = (i + 1) * getWidth() }}>
               <img src={img} alt="" draggable={false} />
             </div>
           ))}
         </div>
       )}
 
-      {/* Lightbox */}
       {lightboxOpen && (
         <div className="ig-lightbox" onClick={() => setLightboxOpen(false)}>
-          <img
-            src={images[lightboxIndex]}
-            className="ig-lightbox-img"
-            alt=""
-            onClick={e => e.stopPropagation()}
-            draggable={false}
-          />
+          <img src={images[lightboxIndex]} className="ig-lightbox-img" alt="" onClick={e => e.stopPropagation()} draggable={false} />
           {n > 1 && (
             <>
               <button className="ig-lightbox-btn" style={{ left: '1rem' }} onClick={e => { e.stopPropagation(); setLightboxIndex(i => (i - 1 + n) % n) }}>‹</button>
@@ -347,6 +185,7 @@ export default function ProductDetailPage() {
   const [user, setUser] = useState<any>(null)
   const [applying, setApplying] = useState(false)
   const [applied, setApplied] = useState(false)
+  const [isApprovedAffiliate, setIsApprovedAffiliate] = useState(false)
   const [activeAsset, setActiveAsset] = useState<string>('tiktok')
   const [trendAnimated, setTrendAnimated] = useState(0)
 
@@ -373,13 +212,29 @@ export default function ProductDetailPage() {
       setProduct(p)
 
       if (session?.user) {
+        // Check application status — not just applied, but specifically approved
         const { data: app } = await supabase
           .from('affiliate_applications')
-          .select('id')
+          .select('id, status')
           .eq('product_id', p.id)
           .eq('affiliate_id', session.user.id)
           .single()
-        if (app) setApplied(true)
+
+        if (app) {
+          setApplied(true)
+          setIsApprovedAffiliate(app.status === 'approved')
+        }
+
+        // Vendors and admins can also see all assets for their own products
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, vendor_status')
+          .eq('id', session.user.id)
+          .single()
+
+        if (profile && ['vendor', 'admin'].includes(profile.role)) {
+          setIsApprovedAffiliate(true)
+        }
       }
 
       setLoading(false)
@@ -453,44 +308,16 @@ export default function ProductDetailPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#ffffff', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
       <style>{`
-        .pd-nav {
-          background: #fff;
-          border-bottom: 1px solid #e8e6e2;
-          padding: 0 2.5rem;
-          display: flex;
-          align-items: center;
-          height: 68px;
-          gap: 1rem;
-          position: sticky;
-          top: 0;
-          z-index: 50;
-        }
+        .pd-nav { background: #fff; border-bottom: 1px solid #e8e6e2; padding: 0 2.5rem; display: flex; align-items: center; height: 68px; gap: 1rem; position: sticky; top: 0; z-index: 50; }
         .pd-nav-cta { display: block; flex-shrink: 0; }
-        .pd-body {
-          max-width: 1100px;
-          margin: 0 auto;
-          padding: 3rem 2.5rem;
-          display: grid;
-          grid-template-columns: 1fr 360px;
-          gap: 4rem;
-          align-items: start;
-        }
+        .pd-body { max-width: 1100px; margin: 0 auto; padding: 3rem 2.5rem; display: grid; grid-template-columns: 1fr 360px; gap: 4rem; align-items: start; }
         .pd-sticky { position: sticky; top: 88px; }
         .pd-asset-tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; }
         .pd-commission-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
         .trend-bar-track { background: #f2f0ec; border-radius: 100px; height: 8px; overflow: hidden; margin-top: 0.4rem; }
         .trend-bar-fill { height: 100%; border-radius: 100px; transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        @media (max-width: 900px) {
-          .pd-body { grid-template-columns: 1fr; gap: 2rem; padding: 2rem 1.5rem; }
-          .pd-sticky { position: static; }
-        }
-        @media (max-width: 600px) {
-          .pd-nav { padding: 0 1rem; height: 56px; gap: 0.5rem; }
-          .pd-nav-cta { display: none; }
-          .pd-body { padding: 1.5rem 1rem; }
-          .pd-commission-grid { grid-template-columns: repeat(2, 1fr); }
-          .pd-asset-tabs button { font-size: 11.5px !important; padding: 0.4rem 0.75rem !important; }
-        }
+        @media (max-width: 900px) { .pd-body { grid-template-columns: 1fr; gap: 2rem; padding: 2rem 1.5rem; } .pd-sticky { position: static; } }
+        @media (max-width: 600px) { .pd-nav { padding: 0 1rem; height: 56px; gap: 0.5rem; } .pd-nav-cta { display: none; } .pd-body { padding: 1.5rem 1rem; } .pd-commission-grid { grid-template-columns: repeat(2, 1fr); } .pd-asset-tabs button { font-size: 11.5px !important; padding: 0.4rem 0.75rem !important; } }
       `}</style>
 
       {/* Nav */}
@@ -510,13 +337,53 @@ export default function ProductDetailPage() {
       <div className="pd-body">
         {/* Left column */}
         <div>
-          {/* Image gallery */}
+          {/* Image gallery — public */}
           {images.length > 0 && <ImageGallery images={images} />}
 
-          {/* Video embed */}
+          {/* YouTube embed — public (it's public YouTube anyway) */}
           {embedUrl && (
             <div style={{ marginBottom: '2.5rem' }}>
               <iframe src={embedUrl} style={{ width: '100%', aspectRatio: '16/9', border: 'none', borderRadius: '6px' }} allowFullScreen />
+            </div>
+          )}
+
+          {/* MP4 promo video — approved affiliates only */}
+          {product.video_url && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '0.75rem' }}>Promo video</div>
+              {isApprovedAffiliate ? (
+                <div style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: '40px', height: '40px', background: '#e8e6e2', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#0d0d0d" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" /></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>Promo video</div>
+                      <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>MP4 · Available to approved affiliates</div>
+                    </div>
+                  </div>
+                  <a href={product.video_url} download target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.45rem 1rem', borderRadius: '3px', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    Download
+                  </a>
+                </div>
+              ) : (
+                <div style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ fontSize: '20px' }}>🔒</div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>Promo video available</div>
+                    <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
+                      {!loggedIn ? (
+                        <><Link href="/signup" style={{ color: '#0d0d0d', fontWeight: 600 }}>Sign up</Link> and apply to access the promo video</>
+                      ) : !applied ? (
+                        'Apply to promote this product to access the promo video'
+                      ) : (
+                        'You\'ll get access to the promo video once your application is approved'
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -526,9 +393,7 @@ export default function ProductDetailPage() {
               Marketplace · {product.category ?? 'General'}
             </div>
             <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2.25rem', fontWeight: 500, marginBottom: '0.75rem', lineHeight: 1.2 }}>{product.title}</h1>
-            {vendor?.full_name && (
-              <div style={{ fontSize: '13px', color: '#888' }}>by {vendor.full_name}</div>
-            )}
+            {vendor?.full_name && <div style={{ fontSize: '13px', color: '#888' }}>by {vendor.full_name}</div>}
           </div>
 
           {/* Description */}
@@ -539,19 +404,14 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          {/* Commission details */}
+          {/* Commission details — logged-in only */}
           <div style={{ marginBottom: '2.5rem' }}>
             <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '0.75rem' }}>Commission details</div>
-
             {!loggedIn ? (
               <div style={{ position: 'relative', borderRadius: '6px', overflow: 'hidden', border: '1px solid #e8e6e2' }}>
                 <div style={{ filter: 'blur(8px)', userSelect: 'none', pointerEvents: 'none', padding: '1.5rem' }}>
                   <div className="pd-commission-grid">
-                    {[
-                      { label: 'Product price', value: `$${product.price}` },
-                      { label: 'Commission rate', value: '••%' },
-                      { label: 'You earn per sale', value: '$••.••' },
-                    ].map(item => (
+                    {[{ label: 'Product price', value: `$${product.price}` }, { label: 'Commission rate', value: '••%' }, { label: 'You earn per sale', value: '$••.••' }].map(item => (
                       <div key={item.label} style={{ background: '#f9f8f6', borderRadius: '4px', padding: '1rem' }}>
                         <div style={{ fontSize: '11px', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>{item.label}</div>
                         <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.5rem', fontWeight: 600 }}>{item.value}</div>
@@ -575,11 +435,7 @@ export default function ProductDetailPage() {
             ) : (
               <div style={{ border: '1px solid #e8e6e2', borderRadius: '6px', overflow: 'hidden' }}>
                 <div className="pd-commission-grid" style={{ padding: '1.5rem', gap: '1rem' }}>
-                  {[
-                    { label: 'Product price',     value: `$${product.price}` },
-                    { label: 'Commission rate',   value: `${commPct}%` },
-                    { label: 'You earn per sale', value: `$${earn}` },
-                  ].map(item => (
+                  {[{ label: 'Product price', value: `$${product.price}` }, { label: 'Commission rate', value: `${commPct}%` }, { label: 'You earn per sale', value: `$${earn}` }].map(item => (
                     <div key={item.label} style={{ background: '#f9f8f6', borderRadius: '4px', padding: '1rem' }}>
                       <div style={{ fontSize: '11px', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>{item.label}</div>
                       <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.5rem', fontWeight: 600 }}>{item.value}</div>
@@ -594,23 +450,43 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* AI Assets */}
-          {assetTabs.length > 0 && loggedIn && (
+          {/* AI Assets — approved affiliates only */}
+          {assetTabs.length > 0 && (
             <div style={{ marginBottom: '2.5rem' }}>
               <div style={{ fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#888', fontWeight: 600, marginBottom: '0.75rem' }}>Affiliate content assets</div>
-              <div className="pd-asset-tabs" style={{ marginBottom: '1rem' }}>
-                {assetTabs.map(tab => (
-                  <button key={tab.key} onClick={() => setActiveAsset(tab.key)}
-                    style={{ fontSize: '12.5px', fontWeight: 500, padding: '0.45rem 0.9rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: activeAsset === tab.key ? '#0d0d0d' : '#f2f0ec', color: activeAsset === tab.key ? '#ffffff' : '#888' }}>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              {assetTabs.filter(t => t.key === activeAsset).map(tab => (
-                <div key={tab.key} style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem 1.5rem', fontSize: '14px', color: '#3a3a3a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                  {tab.content}
+              {isApprovedAffiliate ? (
+                <>
+                  <div className="pd-asset-tabs" style={{ marginBottom: '1rem' }}>
+                    {assetTabs.map(tab => (
+                      <button key={tab.key} onClick={() => setActiveAsset(tab.key)}
+                        style={{ fontSize: '12.5px', fontWeight: 500, padding: '0.45rem 0.9rem', borderRadius: '4px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: activeAsset === tab.key ? '#0d0d0d' : '#f2f0ec', color: activeAsset === tab.key ? '#ffffff' : '#888' }}>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  {assetTabs.filter(t => t.key === activeAsset).map(tab => (
+                    <div key={tab.key} style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem 1.5rem', fontSize: '14px', color: '#3a3a3a', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                      {tab.content}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div style={{ background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ fontSize: '20px' }}>🔒</div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>AI affiliate assets available</div>
+                    <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
+                      {!loggedIn ? (
+                        <><Link href="/signup" style={{ color: '#0d0d0d', fontWeight: 600 }}>Sign up</Link> and apply to access TikTok hooks, captions, email swipes & more</>
+                      ) : !applied ? (
+                        'Apply to promote this product to unlock AI-generated content assets'
+                      ) : (
+                        'You\'ll get access to all content assets once your application is approved'
+                      )}
+                    </div>
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
 
@@ -644,9 +520,13 @@ export default function ProductDetailPage() {
               </>
             )}
 
-            {applied ? (
+            {isApprovedAffiliate ? (
               <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '0.85rem 1rem', textAlign: 'center', fontSize: '14px', fontWeight: 600, color: '#16a34a' }}>
-                ✓ Applied — pending approval
+                ✓ Approved — you're promoting this
+              </div>
+            ) : applied ? (
+              <div style={{ background: '#fef9ec', border: '1px solid #fde68a', borderRadius: '4px', padding: '0.85rem 1rem', textAlign: 'center', fontSize: '14px', fontWeight: 600, color: '#92400e' }}>
+                ⏳ Applied — pending approval
               </div>
             ) : (
               <button onClick={applyToPromote} disabled={applying}
@@ -678,7 +558,6 @@ export default function ProductDetailPage() {
               <div className="trend-bar-fill" style={{ width: `${(trendAnimated / 10) * 100}%`, background: trendColor }} />
             </div>
             <div style={{ fontSize: '11px', color: trendColor, marginTop: '0.35rem' }}>☑ Trending up</div>
-
             <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
                 <span style={{ color: '#888' }}>Category</span>
