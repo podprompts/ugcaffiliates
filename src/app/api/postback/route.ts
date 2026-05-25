@@ -1,7 +1,7 @@
 // src/app/api/postback/route.ts
-//
-// Conversion Postback — vendors fire this after a confirmed purchase
-// Supports both GET and POST for easier vendor integration
+// Conversion Postback — vendors fire this after a confirmed purchase.
+// Now validates against per-vendor secret from profiles table.
+// Supports both GET and POST.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
@@ -29,7 +29,6 @@ async function handlePostback(req: NextRequest) {
   const amountRaw = searchParams.get('amount')
   const secret    = searchParams.get('secret')
 
-  // 1. Validate required params
   if (!ref || !orderId || !amountRaw || !secret) {
     return json({ error: 'Missing required params: ref, order_id, amount, secret' }, 400)
   }
@@ -41,24 +40,7 @@ async function handlePostback(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // 2. Validate secret against platform_rules
-  const { data: rules } = await supabase
-    .from('platform_rules')
-    .select('rule_key, value')
-    .in('rule_key', ['postback_secret', 'platform_fee_rate'])
-
-  const rulesMap: Record<string, string> = Object.fromEntries(
-    (rules ?? []).map((r: { rule_key: string; value: string }) => [r.rule_key, r.value])
-  )
-
-  const validSecret = rulesMap['postback_secret']
-  if (!validSecret || secret !== validSecret) {
-    return json({ error: 'Invalid secret' }, 401)
-  }
-
-  const platformFeeRate = parseFloat(rulesMap['platform_fee_rate'] ?? '0.10')
-
-  // 3. Resolve tracking code → link + product
+  // ── Resolve tracking code → link + product ───────────────────────────────
   const { data: link, error: linkError } = await supabase
     .from('affiliate_links')
     .select(`
@@ -90,17 +72,39 @@ async function handlePostback(req: NextRequest) {
     return json({ error: 'Product is no longer active' }, 410)
   }
 
-  // 4. Calculate commission (frozen at conversion time)
+  // ── Validate secret against vendor's own postback_secret ─────────────────
+  const { data: vendorProfile } = await supabase
+    .from('profiles')
+    .select('postback_secret')
+    .eq('id', product.vendor_id)
+    .single()
+
+  if (!vendorProfile?.postback_secret || secret !== vendorProfile.postback_secret) {
+    // Fallback: also check global platform_rules secret for backwards compat
+    const { data: rules } = await supabase
+      .from('platform_rules')
+      .select('value')
+      .eq('rule_key', 'postback_secret')
+      .single()
+
+    if (!rules?.value || secret !== rules.value) {
+      return json({ error: 'Invalid secret' }, 401)
+    }
+  }
+
+  const platformFeeRate = 0.10
+
+  // ── Calculate commission ─────────────────────────────────────────────────
   const commissionRate   = product.commission_rate
   const commissionAmount = Math.round(saleAmount * commissionRate * 100) / 100
   const platformFee      = Math.round(saleAmount * platformFeeRate * 100) / 100
 
-  // 5. Hash IP for fraud detection
+  // ── Hash IP ──────────────────────────────────────────────────────────────
   const forwarded = req.headers.get('x-forwarded-for')
   const ip = forwarded ? forwarded.split(',')[0].trim() : 'unknown'
   const ipHash = createHash('sha256').update(ip).digest('hex')
 
-  // 6. Insert conversion (unique constraint handles dedup)
+  // ── Insert conversion ────────────────────────────────────────────────────
   const { data: conversion, error: insertError } = await supabase
     .from('conversions')
     .insert({
@@ -119,7 +123,6 @@ async function handlePostback(req: NextRequest) {
     .select('id')
     .single()
 
-  // Duplicate order — idempotent
   if ((insertError as { code?: string } | null)?.code === '23505') {
     return json({ ok: true, duplicate: true })
   }
