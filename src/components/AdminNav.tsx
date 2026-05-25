@@ -1,11 +1,8 @@
 'use client'
 
 // src/components/AdminNav.tsx
-// Added: role-switch buttons in both desktop and hamburger menu
-// Admin can switch to Vendor or Affiliate view, and switch back from either
-
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -22,9 +19,8 @@ interface Props {
 }
 
 export default function AdminNav({ onSignOut }: Props) {
-  const pathname  = usePathname()
-  const router    = useRouter()
-  const [open, setOpen]         = useState(false)
+  const pathname    = usePathname()
+  const [open, setOpen]           = useState(false)
   const [switching, setSwitching] = useState(false)
 
   const supabase = createBrowserClient(
@@ -32,18 +28,12 @@ export default function AdminNav({ onSignOut }: Props) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  async function switchRole(role: 'vendor' | 'affiliate') {
+  // ── Preview role without touching the database ───────────────────────────
+  function previewAs(role: 'vendor' | 'affiliate') {
     setSwitching(true)
     setOpen(false)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setSwitching(false); return }
-
-    await supabase
-      .from('profiles')
-      .update({ role })
-      .eq('id', session.user.id)
-
-    // Redirect to the role's dashboard
+    // Store a flag so VendorNav/AffiliateNav can show "Back to Admin"
+    localStorage.setItem('ugca_admin_preview', '1')
     window.location.href = role === 'vendor' ? '/vendor' : '/affiliate'
   }
 
@@ -82,21 +72,13 @@ export default function AdminNav({ onSignOut }: Props) {
             })}
           </div>
 
-          {/* Desktop: role switch + sign out */}
+          {/* Desktop: preview buttons + sign out */}
           <div className="admin-desktop-only" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', marginRight: '0.25rem' }}>View as:</span>
-            <button
-              className="admin-switch-btn"
-              onClick={() => switchRole('vendor')}
-              disabled={switching}
-            >
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', marginRight: '0.25rem' }}>Preview as:</span>
+            <button className="admin-switch-btn" onClick={() => previewAs('vendor')} disabled={switching}>
               {switching ? '...' : 'Vendor'}
             </button>
-            <button
-              className="admin-switch-btn"
-              onClick={() => switchRole('affiliate')}
-              disabled={switching}
-            >
+            <button className="admin-switch-btn" onClick={() => previewAs('affiliate')} disabled={switching}>
               {switching ? '...' : 'Affiliate'}
             </button>
             <span style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', margin: '0 0.25rem' }} />
@@ -114,8 +96,6 @@ export default function AdminNav({ onSignOut }: Props) {
           {/* Mobile dropdown */}
           {open && (
             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#0d0d0d', borderTop: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', paddingBottom: '0.5rem' }}>
-
-              {/* Nav pages */}
               {NAV_LINKS.map(n => {
                 const active = pathname === n.href
                 return (
@@ -124,33 +104,16 @@ export default function AdminNav({ onSignOut }: Props) {
                   </Link>
                 )
               })}
-
-              {/* Role switch section */}
               <div style={{ padding: '0.75rem 1.25rem 0.3rem', fontSize: '10px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)', borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: '0.25rem' }}>
-                Switch role
+                Preview as
               </div>
-              <button
-                className="admin-mobile-switch"
-                style={{ color: 'rgba(255,255,255,0.6)' }}
-                onClick={() => switchRole('vendor')}
-                disabled={switching}
-              >
-                👔 {switching ? 'Switching...' : 'View as Vendor'}
+              <button className="admin-mobile-switch" style={{ color: 'rgba(255,255,255,0.6)' }} onClick={() => previewAs('vendor')} disabled={switching}>
+                {switching ? 'Switching...' : 'View as Vendor'}
               </button>
-              <button
-                className="admin-mobile-switch"
-                style={{ color: 'rgba(255,255,255,0.6)' }}
-                onClick={() => switchRole('affiliate')}
-                disabled={switching}
-              >
-                🔗 {switching ? 'Switching...' : 'View as Affiliate'}
+              <button className="admin-mobile-switch" style={{ color: 'rgba(255,255,255,0.6)' }} onClick={() => previewAs('affiliate')} disabled={switching}>
+                {switching ? 'Switching...' : 'View as Affiliate'}
               </button>
-
-              {/* Sign out */}
-              <button
-                onClick={() => { setOpen(false); onSignOut() }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.85rem 1.25rem', fontSize: '14px', fontWeight: 500, color: 'rgba(255,255,255,0.35)', background: 'none', border: 'none', borderTop: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', fontFamily: 'inherit', marginTop: '0.25rem' }}
-              >
+              <button onClick={() => { setOpen(false); onSignOut() }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.85rem 1.25rem', fontSize: '14px', fontWeight: 500, color: 'rgba(255,255,255,0.35)', background: 'none', border: 'none', borderTop: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', fontFamily: 'inherit', marginTop: '0.25rem' }}>
                 Sign out
               </button>
             </div>

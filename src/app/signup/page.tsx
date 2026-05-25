@@ -36,7 +36,13 @@ export default function SignupPage() {
     if (signupError) { setError(signupError.message); setLoading(false); return }
 
     if (data.user) {
-      await supabase.from('profiles').update({ role, full_name: fullName }).eq('id', data.user.id)
+      // Vendors start as pending_approval; affiliates are immediately active
+      const profileUpdate: Record<string, any> = { role, full_name: fullName }
+      if (role === 'vendor') {
+        profileUpdate.vendor_status = 'pending_approval'
+      }
+
+      await supabase.from('profiles').update(profileUpdate).eq('id', data.user.id)
 
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
@@ -87,9 +93,14 @@ export default function SignupPage() {
         {success ? (
           <div style={{ textAlign: 'center' as const, padding: '2rem 0' }}>
             <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500, marginBottom: '1rem' }}>Check your email</h1>
-            <p style={{ fontSize: '14px', color: '#3a3a3a', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+            <p style={{ fontSize: '14px', color: '#3a3a3a', lineHeight: 1.7, marginBottom: '0.75rem' }}>
               We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.
             </p>
+            {role === 'vendor' && (
+              <p style={{ fontSize: '13px', color: '#888', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+                Once confirmed, your vendor application will be reviewed by our team — usually within 24 hours.
+              </p>
+            )}
             <Link href="/login" style={{ fontSize: '13px', color: '#888', textDecoration: 'underline' }}>Back to sign in</Link>
           </div>
         ) : (
@@ -97,7 +108,11 @@ export default function SignupPage() {
             <div style={{ textAlign: 'center' as const, marginBottom: '2rem' }}>
               <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2.25rem', fontWeight: 500, marginBottom: '0.4rem' }}>Create your account</h1>
               <p style={{ fontSize: '13.5px', color: '#888' }}>
-                {role === 'vendor' ? 'Free to list. We only take 4% on confirmed sales.' : 'Free to join. No monthly fees.'}
+                {role === 'vendor'
+                  ? 'Free to list. We only take 10% on confirmed sales.'
+                  : role === 'affiliate'
+                  ? 'Free to join. No monthly fees.'
+                  : 'Free to join.'}
               </p>
             </div>
 
@@ -107,7 +122,7 @@ export default function SignupPage() {
               <div className="role-grid">
                 {[
                   { key: 'affiliate', title: 'Promote products', sub: 'Earn commissions as an affiliate' },
-                  { key: 'vendor', title: 'List my products', sub: 'Sell via affiliate creators' },
+                  { key: 'vendor',    title: 'List my products', sub: 'Sell via affiliate creators' },
                 ].map(opt => (
                   <button
                     key={opt.key}
@@ -124,6 +139,11 @@ export default function SignupPage() {
                   </button>
                 ))}
               </div>
+              {role === 'vendor' && (
+                <div style={{ fontSize: '12px', color: '#888', background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '0.75rem 1rem', marginTop: '0.5rem' }}>
+                  Vendor accounts require a quick review before listing. We'll email you within 24 hours.
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column' as const, gap: '1rem' }}>
@@ -151,7 +171,7 @@ export default function SignupPage() {
               )}
 
               <button type="submit" disabled={loading} style={{ width: '100%', padding: '0.85rem', background: loading ? '#888' : '#0d0d0d', color: '#ffffff', fontSize: '14px', fontWeight: 600, border: 'none', borderRadius: '3px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                {loading ? 'Creating account...' : 'Create account'}
+                {loading ? 'Creating account...' : role === 'vendor' ? 'Submit application' : 'Create account'}
               </button>
             </form>
 

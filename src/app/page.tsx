@@ -1,6 +1,8 @@
 // src/app/page.tsx
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 import Navbar from '@/components/Navbar'
 import ProductCarousel from '@/components/ProductCarousel'
 
@@ -13,7 +15,7 @@ async function getFeaturedProducts() {
     .from('products')
     .select('id, slug, title, price, commission_rate, image_url, images, category, profiles!vendor_id(full_name)')
     .eq('status', 'active')
-    .order('total_conversions', { ascending: false })
+    .order('created_at', { ascending: false }) // ← newest first
     .limit(10)
   return data ?? []
 }
@@ -53,16 +55,37 @@ async function getCategoryCounts() {
   return counts
 }
 
+async function getLoggedInUser() {
+  try {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll() },
+          setAll() {},
+        },
+      }
+    )
+    const { data: { user } } = await supabase.auth.getUser()
+    return !!user
+  } catch {
+    return false
+  }
+}
+
 const CATEGORIES = [
   'Digital Products', 'Courses & Education', 'Beauty & Wellness', 'Fashion & Apparel',
   'SaaS & Software', 'Fitness', 'Home & Living', 'Food & Drink',
 ]
 
 export default async function HomePage() {
-  const [featuredProducts, stats, categoryCounts] = await Promise.all([
+  const [featuredProducts, stats, categoryCounts, loggedIn] = await Promise.all([
     getFeaturedProducts(),
     getStats(),
     getCategoryCounts(),
+    getLoggedInUser(),
   ])
 
   const fmt = (n: number) =>
@@ -132,7 +155,7 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* STAT BAR — real data */}
+      {/* STAT BAR */}
       <div className="stat-bar">
         {[
           { n: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', l: 'Total commissions tracked' },
@@ -147,20 +170,20 @@ export default async function HomePage() {
         ))}
       </div>
 
-      {/* CAROUSEL — infinite scroll */}
+      {/* CAROUSEL — newest first, commission gated */}
       {featuredProducts.length > 0 && (
         <section className="section-pad">
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
             <h2 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 500 }}>Products to promote</h2>
             <Link href="/marketplace" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', border: '1px solid #d0cdc8', padding: '0.45rem 1rem', borderRadius: '3px', textDecoration: 'none', whiteSpace: 'nowrap' }}>All products</Link>
           </div>
-          <ProductCarousel products={featuredProducts as any} />
+          <ProductCarousel products={featuredProducts as any} loggedIn={loggedIn} />
         </section>
       )}
 
       <div style={{ height: '1px', background: '#e8e6e2', margin: '0 2.5rem' }} />
 
-      {/* CATEGORIES — real counts */}
+      {/* CATEGORIES */}
       <section className="section-pad" style={{ background: '#f9f8f6' }}>
         <h2 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 500, marginBottom: '1.75rem' }}>Browse by category</h2>
         <div className="category-grid">

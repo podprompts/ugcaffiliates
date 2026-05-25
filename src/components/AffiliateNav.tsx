@@ -1,8 +1,9 @@
 'use client'
 
+// src/components/AffiliateNav.tsx
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const NAV_LINKS = [
   { label: 'Dashboard', href: '/affiliate' },
@@ -20,6 +21,16 @@ interface Props {
 export default function AffiliateNav({ profileInitial, onSignOut }: Props) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const [isAdminPreview, setIsAdminPreview] = useState(false)
+
+  useEffect(() => {
+    setIsAdminPreview(localStorage.getItem('ugca_admin_preview') === '1')
+  }, [])
+
+  function backToAdmin() {
+    localStorage.removeItem('ugca_admin_preview')
+    window.location.href = '/admin'
+  }
 
   return (
     <>
@@ -38,11 +49,20 @@ export default function AffiliateNav({ profileInitial, onSignOut }: Props) {
         }
       `}</style>
 
+      {/* Admin preview banner */}
+      {isAdminPreview && (
+        <div style={{ background: '#1a1a1a', borderBottom: '1px solid #333', padding: '0.4rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>Previewing as Affiliate</span>
+          <button onClick={backToAdmin} style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', background: 'none', border: '1px solid rgba(255,255,255,0.2)', padding: '0.2rem 0.75rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            ← Back to Admin
+          </button>
+        </div>
+      )}
+
       <div style={{ position: 'sticky', top: 0, zIndex: 50 }}>
         <nav style={{ background: '#ffffff', borderBottom: '1px solid #e8e6e2', padding: '0 2rem', display: 'flex', alignItems: 'center', height: '60px', position: 'relative' }}>
           <Link href="/" style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.2rem', fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', textDecoration: 'none', color: '#0d0d0d', flexShrink: 0 }}>U G C A</Link>
 
-          {/* Desktop links */}
           <div className="a2-nav-links">
             {NAV_LINKS.map(n => {
               const active = pathname === n.href
@@ -54,14 +74,12 @@ export default function AffiliateNav({ profileInitial, onSignOut }: Props) {
             })}
           </div>
 
-          {/* Desktop right */}
           <div className="a2-nav-right">
             <Link href="/marketplace" style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.45rem 1rem', borderRadius: '4px', textDecoration: 'none', whiteSpace: 'nowrap' }}>+ Find products</Link>
             <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: '#e8e6e2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>{profileInitial}</div>
             <button onClick={onSignOut} style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Sign out</button>
           </div>
 
-          {/* Hamburger (mobile only) */}
           <button className="a2-hamburger" onClick={() => setOpen(o => !o)} aria-label="Toggle menu">
             {open
               ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -69,7 +87,6 @@ export default function AffiliateNav({ profileInitial, onSignOut }: Props) {
             }
           </button>
 
-          {/* Mobile dropdown */}
           {open && (
             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#ffffff', borderBottom: '1px solid #e8e6e2', boxShadow: '0 8px 24px rgba(0,0,0,0.08)', paddingBottom: '0.75rem' }}>
               {NAV_LINKS.map(n => {
@@ -81,6 +98,11 @@ export default function AffiliateNav({ profileInitial, onSignOut }: Props) {
                 )
               })}
               <Link href="/marketplace" className="a2-mobile-cta" onClick={() => setOpen(false)}>+ Find products</Link>
+              {isAdminPreview && (
+                <button onClick={backToAdmin} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.85rem 1.25rem', fontSize: '14px', color: '#0d0d0d', fontWeight: 600, background: 'none', border: 'none', borderTop: '1px solid #f2f0ec', cursor: 'pointer', fontFamily: 'inherit', marginTop: '0.25rem' }}>
+                  ← Back to Admin
+                </button>
+              )}
               <button onClick={() => { setOpen(false); onSignOut() }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.85rem 1.25rem', fontSize: '14px', color: '#888', background: 'none', border: 'none', borderTop: '1px solid #f2f0ec', cursor: 'pointer', fontFamily: 'inherit', marginTop: '0.25rem' }}>
                 Sign out
               </button>

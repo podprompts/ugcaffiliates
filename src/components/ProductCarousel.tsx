@@ -1,10 +1,6 @@
 'use client'
 
 // src/components/ProductCarousel.tsx
-// Mobile: 100% native browser scroll — buttery smooth, no JS interference.
-// Desktop: JS drag with momentum.
-// Both: subtle image parallax on scroll.
-
 import { useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
@@ -19,7 +15,12 @@ interface Product {
   profiles?: { full_name?: string; business_name?: string }
 }
 
-export default function ProductCarousel({ products }: { products: Product[] }) {
+interface Props {
+  products: Product[]
+  loggedIn?: boolean
+}
+
+export default function ProductCarousel({ products, loggedIn = false }: Props) {
   const trackRef    = useRef<HTMLDivElement>(null)
   const isDragging  = useRef(false)
   const startX      = useRef(0)
@@ -46,12 +47,10 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     return card.offsetWidth + 16
   }
 
-  // Detect mobile once on mount
   useEffect(() => {
     isMobile.current = window.matchMedia('(pointer: coarse)').matches
   }, [])
 
-  // Seamless infinite loop — fires on native scroll too
   const checkLoop = useCallback(() => {
     const el = trackRef.current
     if (!el) return
@@ -66,7 +65,6 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     }
   }, [n])
 
-  // Subtle parallax — images shift slightly opposite to scroll
   const updateParallax = useCallback(() => {
     const el = trackRef.current
     if (!el) return
@@ -84,7 +82,6 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     })
   }, [])
 
-  // Set initial scroll + wire native scroll listener
   useEffect(() => {
     const el = trackRef.current
     if (!el) return
@@ -92,7 +89,6 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     if (step) el.scrollLeft = CLONES * step
     updateParallax()
 
-    // Native scroll listener handles loop + parallax for mobile
     const onScroll = () => {
       checkLoop()
       updateParallax()
@@ -101,7 +97,6 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     return () => el.removeEventListener('scroll', onScroll)
   }, [checkLoop, updateParallax])
 
-  // Desktop momentum after drag release
   const momentum = useCallback(() => {
     const el = trackRef.current
     if (!el) return
@@ -118,9 +113,7 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
     rafId.current = requestAnimationFrame(momentum)
   }, [checkLoop, updateParallax])
 
-  // ── Desktop mouse drag only ───────────────────────────────────────────────
   const onMouseDown = (e: React.MouseEvent) => {
-    // Skip on mobile — native touch handles it
     if (isMobile.current) return
     if (rafId.current) cancelAnimationFrame(rafId.current)
     const el = trackRef.current!
@@ -167,7 +160,8 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
   if (!n) return null
 
   return (
-    <div style={{ position: 'relative', margin: '0 -2.5rem' }}>
+    /* No negative margin — let padding handle the edge fade instead */
+    <div style={{ position: 'relative' }}>
       <style>{`
         .pc-track {
           display: flex;
@@ -178,9 +172,7 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
           padding: 0 2.5rem;
           cursor: grab;
           will-change: scroll-position;
-          /* Native momentum on iOS */
           -webkit-overflow-scrolling: touch;
-          /* Tell browser: this scrolls horizontally, don't intercept */
           overscroll-behavior-x: contain;
         }
         .pc-track::-webkit-scrollbar { display: none; }
@@ -217,24 +209,44 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
           text-decoration: underline;
           text-underline-offset: 2px;
         }
+        .pc-lock-badge {
+          position: absolute;
+          bottom: 8px;
+          left: 8px;
+          background: rgba(13,13,13,0.75);
+          color: #fff;
+          font-size: 10.5px;
+          font-weight: 600;
+          padding: 0.2rem 0.5rem;
+          border-radius: 2px;
+          z-index: 1;
+          display: flex;
+          align-items: center;
+          gap: 0.3rem;
+          backdrop-filter: blur(4px);
+        }
 
         @media (max-width: 1024px) { .pc-card { width: calc(45% - 8px); } }
+
         @media (max-width: 768px) {
           .pc-track {
             gap: 12px;
-            padding: 0 1.25rem;
-            /* Snap to cards on mobile for crisp feel */
+            /* Match section padding so first card starts flush with content */
+            padding: 0 1rem 0 1rem;
             scroll-snap-type: x mandatory;
-            scroll-padding: 0 1.25rem;
+            scroll-padding-left: 1rem;
           }
           .pc-card {
-            width: calc(78% - 6px);
-            /* Each card snaps into place */
+            /* Show most of first card + peek of second */
+            width: calc(82% - 6px);
             scroll-snap-align: start;
           }
         }
         @media (max-width: 480px) {
-          .pc-card { width: calc(86% - 6px); }
+          .pc-track {
+            padding: 0 1rem;
+          }
+          .pc-card { width: calc(88% - 6px); }
         }
       `}</style>
 
@@ -242,7 +254,6 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
         ref={trackRef}
         className="pc-track"
         onMouseDown={onMouseDown}
-        // No touch handlers — browser handles it natively
       >
         {items.map((p, idx) => {
           const vendor      = p.profiles as any
@@ -273,21 +284,35 @@ export default function ProductCarousel({ products }: { products: Product[] }) {
                 ) : (
                   <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>No image</span>
                 )}
-                <div style={{ position: 'absolute', bottom: '8px', left: '8px', background: '#0d0d0d', color: '#fff', fontSize: '10.5px', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '2px', zIndex: 1 }}>
-                  {commPct}% commission
-                </div>
+
+                {loggedIn ? (
+                  <div style={{ position: 'absolute', bottom: '8px', left: '8px', background: '#0d0d0d', color: '#fff', fontSize: '10.5px', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '2px', zIndex: 1 }}>
+                    {commPct}% commission
+                  </div>
+                ) : (
+                  <div className="pc-lock-badge">
+                    🔒 Sign up to see
+                  </div>
+                )}
               </div>
+
               <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '11px', fontWeight: 500, color: '#888', marginBottom: '0.2rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{displayName}</div>
               <div className="pc-title" style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', marginBottom: '0.3rem', lineHeight: 1.35 }}>{p.title}</div>
-              <div style={{ fontSize: '12px', color: '#888' }}>Earn up to <strong style={{ color: '#0d0d0d' }}>${earn}</strong> per sale</div>
+
+              {loggedIn ? (
+                <div style={{ fontSize: '12px', color: '#888' }}>Earn up to <strong style={{ color: '#0d0d0d' }}>${earn}</strong> per sale</div>
+              ) : (
+                <div style={{ fontSize: '12px', color: '#888', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  Earn up to <span style={{ filter: 'blur(5px)', userSelect: 'none', color: '#0d0d0d', fontWeight: 600 }}>$••.••</span> per sale
+                </div>
+              )}
             </Link>
           )
         })}
       </div>
 
-      {/* Fade edges */}
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '2.5rem', height: '100%', background: 'linear-gradient(to right, #ffffff, transparent)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', top: 0, right: 0, width: '5rem', height: '100%', background: 'linear-gradient(to left, #ffffff, transparent)', pointerEvents: 'none' }} />
+      {/* Subtle right fade only — no left fade so first card isn't clipped */}
+      <div style={{ position: 'absolute', top: 0, right: 0, width: '4rem', height: '100%', background: 'linear-gradient(to left, #ffffff, transparent)', pointerEvents: 'none' }} />
     </div>
   )
 }

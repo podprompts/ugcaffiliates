@@ -6,8 +6,6 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 import VendorNav from '@/components/VendorNav'
-import VideoFormatPicker from '@/components/VideoFormatPicker'
-import { VideoFormatKey } from '@/lib/video-formats'
 
 const CATEGORIES = [
   'Digital Products', 'Courses & Education', 'SaaS & Software',
@@ -28,27 +26,27 @@ export default function VendorEditProductPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const [uploadingImages, setUploadingImages] = useState(false)
-  const [isPro, setIsPro] = useState(false)
   const [profileInitial, setProfileInitial] = useState('V')
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // Image state
   const [productImages, setProductImages] = useState<string[]>([])
-
+  const [uploadingImages, setUploadingImages] = useState(false)
+  const [imageProgress, setImageProgress] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const heygenImageRef = useRef<HTMLInputElement>(null)
 
-  // HeyGen state
-  const [heygenImage, setHeygenImage] = useState('')
-  const [heygenImageUploading, setHeygenImageUploading] = useState(false)
-  const [heygenFormat, setHeygenFormat] = useState<VideoFormatKey>('tiktok')
-  const [heygenLoading, setHeygenLoading] = useState(false)
-  const [generatedVideo, setGeneratedVideo] = useState('')
-  const [generatedScript, setGeneratedScript] = useState('')
+  // Video state
+  const [videoUrl, setVideoUrl] = useState('')
+  const [videoName, setVideoName] = useState('')
+  const [videoUploading, setVideoUploading] = useState(false)
+  const [videoProgress, setVideoProgress] = useState(0)
+  const videoInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     title: '', description: '', product_url: '', price: '',
     commission_rate: '', category: '', brand_guidelines: '',
     prohibited_terms: '', cookie_days: '30', auto_approve: false,
-    video_url: '', video_embed_url: '', status: 'active',
+    video_embed_url: '', video_aspect_ratio: '16/9', status: 'active',
   })
 
   const supabase = createBrowserClient(
@@ -68,34 +66,38 @@ export default function VendorEditProductPage() {
 
       const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${session.access_token}` } })
       const { profile } = await res.json()
-      if (!profile || profile.role !== 'vendor') { router.push('/login'); return }
-      setIsPro(!!profile.stripe_onboarded)
+
+      if (!profile || !['vendor', 'admin'].includes(profile.role)) {
+        router.push('/login'); return
+      }
+
+      const adminMode = profile.role === 'admin'
+      setIsAdmin(adminMode)
       setProfileInitial(profile.full_name?.charAt(0)?.toUpperCase() ?? 'V')
 
-      const { data: product } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', productId)
-        .eq('vendor_id', session.user.id)
-        .single()
+      const query = supabase.from('products').select('*').eq('id', productId)
+      if (!adminMode) query.eq('vendor_id', session.user.id)
+      const { data: product } = await query.single()
 
-      if (!product) { router.push('/vendor/products'); return }
+      if (!product) { router.push(adminMode ? '/admin/products' : '/vendor/products'); return }
 
       setProductImages(product.images ?? (product.image_url ? [product.image_url] : []))
+      setVideoUrl(product.video_url ?? '')
+      setVideoName(product.video_url ? 'Uploaded video' : '')
       setForm({
-        title: product.title ?? '',
-        description: product.description ?? '',
-        product_url: product.product_url ?? '',
-        price: product.price?.toString() ?? '',
-        commission_rate: ((product.commission_rate ?? 0) * 100).toFixed(0),
-        category: product.category ?? '',
+        title:            product.title ?? '',
+        description:      product.description ?? '',
+        product_url:      product.product_url ?? '',
+        price:            product.price?.toString() ?? '',
+        commission_rate:  ((product.commission_rate ?? 0) * 100).toFixed(0),
+        category:         product.category ?? '',
         brand_guidelines: product.brand_guidelines ?? '',
         prohibited_terms: product.prohibited_terms ?? '',
-        cookie_days: product.cookie_days?.toString() ?? '30',
-        auto_approve: product.auto_approve ?? false,
-        video_url: product.video_url ?? '',
-        video_embed_url: product.video_embed_url ?? '',
-        status: product.status ?? 'active',
+        cookie_days:      product.cookie_days?.toString() ?? '30',
+        auto_approve:     product.auto_approve ?? false,
+        video_embed_url:  product.video_embed_url ?? '',
+        video_aspect_ratio: product.video_aspect_ratio ?? '16/9',
+        status:           product.status ?? 'active',
       })
       setLoading(false)
     }
@@ -106,87 +108,97 @@ export default function VendorEditProductPage() {
     setForm(prev => ({ ...prev, [key]: value }))
   }
 
+  // ── Image upload ─────────────────────────────────────────────────────────
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (!files.length) return
     if (productImages.length + files.length > 10) { setError('Maximum 10 images allowed'); return }
-    setUploadingImages(true)
+    setUploadingImages(true); setError('')
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
     const uploaded: string[] = []
-    for (const file of files) {
-      const ext = file.name.split('.').pop()
-      const path = `products/${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, { contentType: file.type })
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-        uploaded.push(publicUrl)
-      }
+    for (let i = 0; i < files.length; i++) {
+      setImageProgress(`Uploading image ${i + 1} of ${files.length}…`)
+      const fd = new FormData()
+      fd.append('file', files[i])
+      fd.append('type', 'image')
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: fd,
+      })
+      const data = await res.json()
+      if (res.ok && data.url) uploaded.push(data.url)
+      else setError(data.error ?? 'Failed to upload image')
     }
     setProductImages(prev => [...prev, ...uploaded])
+    setImageProgress('')
     setUploadingImages(false)
-  }
-
-  async function handleHeygenImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setHeygenImageUploading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const ext = file.name.split('.').pop()
-    const path = `heygen/${session.user.id}/${Date.now()}.${ext}`
-    const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, { contentType: file.type })
-    if (!uploadError) {
-      const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(path)
-      setHeygenImage(publicUrl)
-    }
-    setHeygenImageUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   function removeImage(index: number) {
     setProductImages(prev => prev.filter((_, i) => i !== index))
   }
 
-  async function generateHeygenVideo() {
-    if (!heygenImage) { setError('Upload a product image first'); return }
-    if (!form.title || !form.description) { setError('Product title and description are required'); return }
-    setHeygenLoading(true); setError('')
+  // ── Video upload ─────────────────────────────────────────────────────────
+  async function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setVideoUploading(true); setVideoProgress(0); setError('')
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
+
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('type', 'video')
+
     try {
-      const res = await fetch('/api/ai/heygen-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          category: form.category,
-          price: form.price,
-          commission_rate: form.commission_rate ? parseFloat(form.commission_rate) / 100 : undefined,
-          imageUrl: heygenImage,
-          format: heygenFormat,
-        }),
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.onprogress = ev => {
+          if (ev.lengthComputable) setVideoProgress(Math.round((ev.loaded / ev.total) * 100))
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText)
+              if (data.url) { setVideoUrl(data.url); setVideoName(file.name); resolve() }
+              else reject(new Error(data.error ?? 'Upload failed'))
+            } catch { reject(new Error('Invalid response')) }
+          } else {
+            try { reject(new Error(JSON.parse(xhr.responseText).error ?? `Upload failed (${xhr.status})`)) }
+            catch { reject(new Error(`Upload failed (${xhr.status})`)) }
+          }
+        }
+        xhr.onerror = () => reject(new Error('Network error'))
+        xhr.open('POST', '/api/upload')
+        xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`)
+        xhr.send(fd)
       })
-      const data = await res.json()
-      if (data.video_url) {
-        setGeneratedVideo(data.video_url)
-        setGeneratedScript(data.script ?? '')
-        set('video_url', data.video_url)
-      } else {
-        setError(data.error ?? 'Failed to generate video. Try again.')
-      }
-    } catch { setError('Failed to generate video.') }
-    setHeygenLoading(false)
+    } catch (err: any) {
+      setError(err.message ?? 'Video upload failed')
+    }
+
+    setVideoUploading(false); setVideoProgress(0)
+    if (videoInputRef.current) videoInputRef.current.value = ''
   }
 
+  function removeVideo() {
+    setVideoUrl(''); setVideoName('')
+    if (videoInputRef.current) videoInputRef.current.value = ''
+  }
+
+  // ── Delete ───────────────────────────────────────────────────────────────
   async function handleDelete() {
     if (!confirmDelete) { setConfirmDelete(true); return }
     setDeleting(true)
     await supabase.from('products').delete().eq('id', productId)
-    router.push('/vendor/products')
+    router.push(isAdmin ? '/admin/products' : '/vendor/products')
   }
 
+  // ── Save ─────────────────────────────────────────────────────────────────
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true); setError(''); setSuccess(false)
@@ -197,22 +209,23 @@ export default function VendorEditProductPage() {
     }
 
     const { error: updateError } = await supabase.from('products').update({
-      title: form.title,
-      description: form.description,
-      product_url: form.product_url,
-      price: parseFloat(form.price),
-      commission_rate: commissionRate,
-      category: form.category,
+      title:            form.title,
+      description:      form.description,
+      product_url:      form.product_url,
+      price:            parseFloat(form.price),
+      commission_rate:  commissionRate,
+      category:         form.category,
       brand_guidelines: form.brand_guidelines || null,
       prohibited_terms: form.prohibited_terms || null,
-      cookie_days: parseInt(form.cookie_days),
-      auto_approve: form.auto_approve,
-      status: form.status,
-      images: productImages,
-      image_url: productImages[0] ?? null,
-      video_url: form.video_url || null,
-      video_embed_url: form.video_embed_url || null,
-      updated_at: new Date().toISOString(),
+      cookie_days:      parseInt(form.cookie_days),
+      auto_approve:     form.auto_approve,
+      status:           form.status,
+      images:           productImages,
+      image_url:        productImages[0] ?? null,
+      video_url:        videoUrl || null,
+      video_embed_url:  form.video_embed_url || null,
+      video_aspect_ratio: form.video_aspect_ratio,
+      updated_at:       new Date().toISOString(),
     }).eq('id', productId)
 
     if (updateError) { setError(updateError.message); setSaving(false); return }
@@ -227,9 +240,10 @@ export default function VendorEditProductPage() {
     </div>
   )
 
-  const inputStyle = { width: '100%', padding: '0.7rem 1rem', border: '1px solid #e8e6e2', borderRadius: '3px', fontSize: '14px', fontFamily: 'inherit', color: '#0d0d0d', background: '#ffffff', outline: 'none', boxSizing: 'border-box' as const }
-  const labelStyle = { display: 'block' as const, fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#3a3a3a', marginBottom: '0.4rem' }
-  const sectionStyle = { background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.75rem', marginBottom: '1.25rem' }
+  const inp = { width: '100%', padding: '0.7rem 1rem', border: '1px solid #e8e6e2', borderRadius: '3px', fontSize: '14px', fontFamily: 'inherit', color: '#0d0d0d', background: '#ffffff', outline: 'none', boxSizing: 'border-box' as const }
+  const lbl = { display: 'block' as const, fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#3a3a3a', marginBottom: '0.4rem' }
+  const sec = { background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.75rem', marginBottom: '1.25rem' }
+  const secLbl = { fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: '#888', fontWeight: 600, marginBottom: '1.25rem' }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f9f8f6', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
@@ -238,6 +252,12 @@ export default function VendorEditProductPage() {
         .ve-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         .ve-three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
         .ve-img-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+        .drop-zone { border: 2px dashed #d0cdc8; border-radius: 6px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+        .drop-zone:hover { border-color: #0d0d0d; background: #f9f8f6; }
+        .prog-bar { height: 4px; background: #e8e6e2; border-radius: 2px; overflow: hidden; margin-top: 0.75rem; }
+        .prog-fill { height: 100%; background: #0d0d0d; border-radius: 2px; transition: width 0.2s ease; }
+        .ratio-btn { flex: 1; padding: 0.75rem; border-radius: 3px; border: 1.5px solid #e8e6e2; background: #ffffff; cursor: pointer; font-family: inherit; transition: all 0.15s; text-align: center; }
+        .ratio-btn.active { border-color: #0d0d0d; background: #0d0d0d; color: #ffffff; }
         @media (max-width: 768px) {
           .ve-content { padding: 1.5rem 1rem; }
           .ve-two-col { grid-template-columns: 1fr; }
@@ -253,56 +273,54 @@ export default function VendorEditProductPage() {
       <VendorNav profileInitial={profileInitial} onSignOut={handleSignOut} />
 
       <div className="ve-content">
-        <div style={{ marginBottom: '2rem' }}>
-          <Link href="/vendor/products" style={{ fontSize: '12px', color: '#888', textDecoration: 'none', marginBottom: '1rem', display: 'inline-block' }}>← Back to products</Link>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <div style={{ fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888', fontWeight: 500, marginBottom: '0.4rem' }}>Edit product</div>
-              <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1.75rem', fontWeight: 500 }}>{form.title}</h1>
-            </div>
 
-            {/* Status + Delete controls */}
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              {['active', 'paused'].map(s => (
-                <button key={s} type="button" onClick={() => set('status', s)} style={{ fontSize: '12px', fontWeight: 500, padding: '0.4rem 0.85rem', borderRadius: '3px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: form.status === s ? '#0d0d0d' : '#f2f0ec', color: form.status === s ? '#ffffff' : '#888', textTransform: 'capitalize' }}>{s}</button>
-              ))}
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                style={{ fontSize: '12px', fontWeight: 500, padding: '0.4rem 0.85rem', borderRadius: '3px', border: confirmDelete ? '1px solid #dc2626' : '1px solid #fecaca', cursor: 'pointer', fontFamily: 'inherit', background: confirmDelete ? '#dc2626' : '#fff1f2', color: confirmDelete ? '#ffffff' : '#dc2626' }}
-              >
-                {deleting ? 'Deleting...' : confirmDelete ? 'Confirm delete' : 'Delete product'}
-              </button>
-              {confirmDelete && (
-                <button type="button" onClick={() => setConfirmDelete(false)} style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              )}
-            </div>
+        {isAdmin && (
+          <div style={{ background: '#fef9ec', border: '1px solid #fde68a', borderRadius: '4px', padding: '0.75rem 1.25rem', marginBottom: '1.25rem', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>You are editing this listing as Admin.</span>
+            <Link href="/admin/products" style={{ fontSize: '12px', fontWeight: 600, color: '#92400e', textDecoration: 'underline' }}>← Back to Admin Products</Link>
           </div>
+        )}
+
+        <div style={{ marginBottom: '2rem' }}>
+          <Link href={isAdmin ? '/admin/products' : '/vendor/products'} style={{ fontSize: '12px', color: '#888', textDecoration: 'none', marginBottom: '0.75rem', display: 'inline-block' }}>
+            ← {isAdmin ? 'Admin Products' : 'My products'}
+          </Link>
+          <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500, margin: 0 }}>Edit listing</h1>
         </div>
+
+        {error && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', fontSize: '13px', color: '#dc2626' }}>{error}</div>
+        )}
+        {success && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.25rem', fontSize: '13px', color: '#16a34a' }}>Changes saved successfully.</div>
+        )}
 
         <form onSubmit={handleSave}>
 
-          {/* Basic Info */}
-          <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e8e6e2' }}>Product details</div>
+          {/* Core details */}
+          <div style={sec}>
+            <div style={secLbl}>Product details</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={labelStyle}>Product title *</label>
-                <input style={inputStyle} type="text" value={form.title} onChange={e => set('title', e.target.value)} required />
+                <label style={lbl}>Title *</label>
+                <input style={inp} value={form.title} onChange={e => set('title', e.target.value)} required />
               </div>
               <div>
-                <label style={labelStyle}>Description *</label>
-                <textarea style={{ ...inputStyle, minHeight: '100px', resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} required />
+                <label style={lbl}>Description *</label>
+                <textarea style={{ ...inp, minHeight: '100px', resize: 'vertical' }} value={form.description} onChange={e => set('description', e.target.value)} required />
+              </div>
+              <div>
+                <label style={lbl}>Product URL *</label>
+                <input style={inp} type="url" value={form.product_url} onChange={e => set('product_url', e.target.value)} required placeholder="https://" />
               </div>
               <div className="ve-two-col">
                 <div>
-                  <label style={labelStyle}>Product URL *</label>
-                  <input style={inputStyle} type="url" value={form.product_url} onChange={e => set('product_url', e.target.value)} required />
+                  <label style={lbl}>Price ($) *</label>
+                  <input style={inp} type="number" min="0" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} required />
                 </div>
                 <div>
-                  <label style={labelStyle}>Category *</label>
-                  <select style={inputStyle} value={form.category} onChange={e => set('category', e.target.value)} required>
+                  <label style={lbl}>Category</label>
+                  <select style={inp} value={form.category} onChange={e => set('category', e.target.value)}>
                     <option value="">Select a category</option>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -311,176 +329,195 @@ export default function VendorEditProductPage() {
             </div>
           </div>
 
-          {/* Images */}
-          <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>Product images</div>
-            <p style={{ fontSize: '13px', color: '#888', marginBottom: '1.25rem' }}>Add, remove or reorder images. First image is the primary thumbnail. Up to 10 images.</p>
-            <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleImageUpload} />
+          {/* Commission */}
+          <div style={sec}>
+            <div style={secLbl}>Commission & settings</div>
+            <div className="ve-three-col">
+              <div>
+                <label style={lbl}>Commission rate (%) *</label>
+                <input style={inp} type="number" min="5" max="70" step="1" value={form.commission_rate} onChange={e => set('commission_rate', e.target.value)} required />
+                <div style={{ fontSize: '11px', color: '#888', marginTop: '0.35rem' }}>5% – 70%</div>
+              </div>
+              <div>
+                <label style={lbl}>Cookie window (days)</label>
+                <input style={inp} type="number" min="1" max="90" value={form.cookie_days} onChange={e => set('cookie_days', e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.1rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={form.auto_approve} onChange={e => set('auto_approve', e.target.checked)} />
+                  <span style={{ fontSize: '13px', color: '#3a3a3a' }}>Auto-approve affiliates</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div style={sec}>
+            <div style={secLbl}>Listing status</div>
+            <select style={inp} value={form.status} onChange={e => set('status', e.target.value)}>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="draft">Draft</option>
+              {isAdmin && <option value="rejected">Rejected</option>}
+            </select>
+          </div>
+
+          {/* Product images */}
+          <div style={sec}>
+            <div style={secLbl}>Product images <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#aaa' }}>(up to 10)</span></div>
+            <p style={{ fontSize: '13px', color: '#888', margin: '0 0 1rem' }}>JPG, PNG, WebP up to 50MB each. First image is the main thumbnail.</p>
+
             {productImages.length > 0 && (
               <div className="ve-img-grid">
                 {productImages.map((url, i) => (
-                  <div key={i} style={{ position: 'relative', aspectRatio: '1', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div key={i} style={{ position: 'relative', aspectRatio: '1', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e8e6e2' }}>
                     <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    {i === 0 && <div style={{ position: 'absolute', top: '4px', left: '4px', background: '#0d0d0d', color: '#fff', fontSize: '10px', fontWeight: 600, padding: '0.1rem 0.4rem', borderRadius: '2px' }}>Primary</div>}
-                    <button type="button" onClick={() => removeImage(i)} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(220,38,38,0.85)', color: '#fff', border: 'none', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    <button type="button" onClick={() => removeImage(i)} style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: '20px', height: '20px', color: '#fff', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    {i === 0 && <div style={{ position: 'absolute', bottom: '4px', left: '4px', background: 'rgba(0,0,0,0.6)', borderRadius: '2px', padding: '1px 5px', fontSize: '9px', color: '#fff', fontWeight: 600 }}>Main</div>}
                   </div>
                 ))}
               </div>
             )}
-            {productImages.length < 10 && (
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingImages} style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d', border: '1px dashed #d0cdc8', background: '#f9f8f6', padding: '0.75rem 1.5rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                {uploadingImages ? 'Uploading...' : '+ Add more images'}
-              </button>
-            )}
+
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/heic" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingImages || productImages.length >= 10}
+              style={{ fontSize: '13px', color: '#0d0d0d', border: '1px solid #e8e6e2', padding: '0.6rem 1.25rem', borderRadius: '3px', background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', opacity: productImages.length >= 10 ? 0.5 : 1 }}>
+              {uploadingImages ? imageProgress || 'Uploading…' : `+ Add images (${productImages.length}/10)`}
+            </button>
           </div>
 
-          {/* Video */}
-          <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>Product video</div>
-            <p style={{ fontSize: '13px', color: '#888', marginBottom: '1.25rem' }}>Paste an mp4 URL or unlisted YouTube/Vimeo embed URL. Clear the field to remove the video.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={labelStyle}>mp4 video URL</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input style={{ ...inputStyle, flex: 1 }} type="url" value={form.video_url} onChange={e => set('video_url', e.target.value)} placeholder="https://..." />
-                  {form.video_url && <button type="button" onClick={() => set('video_url', '')} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: '1px solid #fecaca', padding: '0 0.75rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Remove</button>}
+          {/* MP4 video upload */}
+          <div style={sec}>
+            <div style={secLbl}>Promo video — MP4 upload</div>
+            <p style={{ fontSize: '13px', color: '#888', margin: '0 0 1.25rem' }}>Upload an MP4, MOV, or WebM. Up to 2GB. Replaces any existing uploaded video.</p>
+
+            {/* Aspect ratio */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={lbl}>Video format</label>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                {[
+                  { value: '9/16', label: '9:16 Vertical', sub: 'TikTok · Reels', icon: '▯' },
+                  { value: '16/9', label: '16:9 Landscape', sub: 'YouTube · Facebook', icon: '▬' },
+                  { value: '1/1',  label: '1:1 Square',    sub: 'Instagram Feed', icon: '▪' },
+                ].map(opt => (
+                  <button key={opt.value} type="button" onClick={() => set('video_aspect_ratio', opt.value)}
+                    className={`ratio-btn${form.video_aspect_ratio === opt.value ? ' active' : ''}`}>
+                    <div style={{ fontSize: '20px', marginBottom: '0.25rem' }}>{opt.icon}</div>
+                    <div style={{ fontSize: '12px', fontWeight: 600 }}>{opt.label}</div>
+                    <div style={{ fontSize: '11px', opacity: 0.65, marginTop: '0.15rem' }}>{opt.sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {videoUrl ? (
+              <div style={{ border: '1px solid #d1fae5', background: '#f0fdf4', borderRadius: '4px', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ width: '40px', height: '40px', background: '#dcfce7', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" /></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#0d0d0d' }}>{videoName || 'Promo video'}</div>
+                    <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px' }}>✓ Uploaded · {form.video_aspect_ratio.replace('/', ':')} format</div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label style={labelStyle}>YouTube / Vimeo embed URL</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input style={{ ...inputStyle, flex: 1 }} type="url" value={form.video_embed_url} onChange={e => set('video_embed_url', e.target.value)} placeholder="https://www.youtube.com/embed/..." />
-                  {form.video_embed_url && <button type="button" onClick={() => set('video_embed_url', '')} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: '1px solid #fecaca', padding: '0 0.75rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Remove</button>}
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <button type="button" onClick={() => videoInputRef.current?.click()}
+                    style={{ fontSize: '12px', color: '#0d0d0d', background: 'none', border: '1px solid #e8e6e2', padding: '0.3rem 0.75rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Replace
+                  </button>
+                  <button type="button" onClick={removeVideo}
+                    style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>
+                    Remove
+                  </button>
                 </div>
-                <div style={{ fontSize: '11px', color: '#888', marginTop: '0.3rem' }}>Use the embed URL (youtube.com/embed/ID), not the watch URL.</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Pricing */}
-          <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e8e6e2' }}>Pricing & commission</div>
-            <div className="ve-three-col">
-              <div>
-                <label style={labelStyle}>Price ($) *</label>
-                <input style={inputStyle} type="number" min="0.01" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} required />
-              </div>
-              <div>
-                <label style={labelStyle}>Commission (%) *</label>
-                <input style={inputStyle} type="number" min="5" max="70" step="0.5" value={form.commission_rate} onChange={e => set('commission_rate', e.target.value)} required />
-              </div>
-              <div>
-                <label style={labelStyle}>Cookie window (days)</label>
-                <input style={inputStyle} type="number" min="1" max="90" value={form.cookie_days} onChange={e => set('cookie_days', e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Affiliate Rules */}
-          <div style={sectionStyle}>
-            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e8e6e2' }}>Affiliate rules</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={labelStyle}>Brand guidelines</label>
-                <textarea style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} value={form.brand_guidelines} onChange={e => set('brand_guidelines', e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Prohibited terms</label>
-                <input style={inputStyle} type="text" value={form.prohibited_terms} onChange={e => set('prohibited_terms', e.target.value)} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <input type="checkbox" id="auto_approve" checked={form.auto_approve} onChange={e => set('auto_approve', e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-                <label htmlFor="auto_approve" style={{ fontSize: '13px', color: '#3a3a3a', cursor: 'pointer' }}>Auto-approve affiliates</label>
-              </div>
-            </div>
-          </div>
-
-          {/* HeyGen AI Avatar Video — Pro only */}
-          <div style={{ ...sectionStyle, border: '1px solid #ddd6fe', background: '#f5f3ff' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#6d28d9' }}>AI avatar video — HeyGen</div>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff', background: '#7c3aed', padding: '0.15rem 0.5rem', borderRadius: '100px' }}>Pro</span>
-            </div>
-            <p style={{ fontSize: '13px', color: '#6d28d9', marginBottom: '1.5rem', opacity: 0.85, lineHeight: 1.65 }}>
-              Upload a product photo — an AI avatar delivers a spoken promo with full audio, lip-sync, and auto-captions. Choose your platform format and generate.
-            </p>
-
-            {!isPro ? (
-              <div style={{ background: 'rgba(109,40,217,0.08)', border: '1px solid #ddd6fe', borderRadius: '3px', padding: '1rem 1.25rem' }}>
-                <div style={{ fontSize: '13px', color: '#6d28d9', fontWeight: 500 }}>Upgrade to Pro to unlock AI video generation.</div>
-                <Link href="/pricing" style={{ fontSize: '12px', color: '#7c3aed', textDecoration: 'underline', marginTop: '0.4rem', display: 'inline-block' }}>View Pro plan →</Link>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-                {/* Step 1 */}
-                <div>
-                  <label style={{ ...labelStyle, color: '#6d28d9' }}>Step 1 — Upload product photo</label>
-                  <p style={{ fontSize: '12px', color: '#7c3aed', marginBottom: '0.75rem', opacity: 0.85 }}>This image appears as the video background behind the avatar.</p>
-                  <input ref={heygenImageRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleHeygenImageUpload} />
-                  {heygenImage ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                      <img src={heygenImage} alt="Product" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd6fe' }} />
-                      <div>
-                        <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 500, marginBottom: '0.4rem' }}>✓ Image uploaded</div>
-                        <button type="button" onClick={() => heygenImageRef.current?.click()} style={{ fontSize: '12px', color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>Change image</button>
-                      </div>
+              <>
+                <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={handleVideoUpload} style={{ display: 'none' }} />
+                <div className="drop-zone" onClick={() => !videoUploading && videoInputRef.current?.click()} style={{ opacity: videoUploading ? 0.7 : 1 }}>
+                  <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#aaa" strokeWidth={1.5} style={{ margin: '0 auto 0.75rem', display: 'block' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                  </svg>
+                  {videoUploading ? (
+                    <div>
+                      <div style={{ fontSize: '13px', color: '#3a3a3a', marginBottom: '0.5rem' }}>Uploading… {videoProgress}%</div>
+                      <div className="prog-bar"><div className="prog-fill" style={{ width: `${videoProgress}%` }} /></div>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => heygenImageRef.current?.click()} disabled={heygenImageUploading} style={{ fontSize: '13px', fontWeight: 500, color: '#7c3aed', border: '1px dashed #c4b5fd', background: 'rgba(109,40,217,0.04)', padding: '0.75rem 1.5rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                      {heygenImageUploading ? 'Uploading...' : '+ Upload product photo'}
-                    </button>
+                    <>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: '#3a3a3a', marginBottom: '0.25rem' }}>Click to upload promo video</div>
+                      <div style={{ fontSize: '12px', color: '#888' }}>MP4, MOV, WebM — up to 2GB</div>
+                    </>
                   )}
                 </div>
+              </>
+            )}
 
-                {/* Step 2 */}
-                <div>
-                  <label style={{ ...labelStyle, color: '#6d28d9' }}>Step 2 — Choose target platform</label>
-                  <p style={{ fontSize: '12px', color: '#7c3aed', marginBottom: '0.75rem', opacity: 0.85 }}>Sets the video dimensions and aspect ratio.</p>
-                  <VideoFormatPicker value={heygenFormat} onChange={setHeygenFormat} disabled={heygenLoading} />
-                </div>
+            {/* Hidden input for replace */}
+            {videoUrl && (
+              <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onChange={handleVideoUpload} style={{ display: 'none' }} />
+            )}
+          </div>
 
-                {/* Generate button */}
-                <button
-                  type="button"
-                  onClick={generateHeygenVideo}
-                  disabled={heygenLoading || !heygenImage || !form.title || !form.description}
-                  style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: heygenLoading ? '#888' : '#7c3aed', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '3px', cursor: (heygenLoading || !heygenImage) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start', opacity: !heygenImage ? 0.5 : 1 }}
-                >
-                  {heygenLoading ? 'Generating avatar video... (~2–3 min)' : 'Generate AI avatar video'}
-                </button>
-
-                {heygenLoading && (
-                  <div style={{ fontSize: '12px', color: '#888', padding: '0.75rem 1rem', background: 'rgba(109,40,217,0.05)', borderRadius: '3px' }}>
-                    HeyGen is rendering your avatar video with audio. This takes 2–3 minutes. Don't close this page.
-                  </div>
-                )}
-
-                {generatedVideo && (
-                  <div>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#16a34a', marginBottom: '0.75rem' }}>✓ Avatar video generated — auto-set as product video above</div>
-                    <video controls style={{ width: '100%', borderRadius: '4px', background: '#0d0d0d', maxHeight: '360px' }} src={generatedVideo} />
-                    {generatedScript && (
-                      <div style={{ marginTop: '1rem', background: '#ffffff', border: '1px solid #ddd6fe', borderRadius: '4px', padding: '1rem 1.25rem' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#888', marginBottom: '0.5rem' }}>Generated script</div>
-                        <div style={{ fontSize: '13px', color: '#3a3a3a', lineHeight: 1.7 }}>{generatedScript}</div>
-                      </div>
-                    )}
-                    <a href={generatedVideo} download style={{ fontSize: '12px', fontWeight: 600, color: '#7c3aed', textDecoration: 'underline', display: 'inline-block', marginTop: '0.75rem' }}>Download video</a>
-                  </div>
-                )}
+          {/* YouTube embed — separate */}
+          <div style={sec}>
+            <div style={secLbl}>YouTube / embed video</div>
+            <p style={{ fontSize: '13px', color: '#888', margin: '0 0 1rem' }}>Paste a YouTube or Vimeo URL. Displays as an embedded player on your product page.</p>
+            <label style={lbl}>Embed URL</label>
+            <input style={inp} type="url" value={form.video_embed_url} onChange={e => set('video_embed_url', e.target.value)} placeholder="https://www.youtube.com/watch?v=…" />
+            {form.video_embed_url && (
+              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '12px', color: '#16a34a' }}>✓ Embed URL saved</div>
+                <button type="button" onClick={() => set('video_embed_url', '')} style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>Remove</button>
               </div>
             )}
           </div>
 
-          {error && <div style={{ fontSize: '13px', color: '#c0392b', padding: '0.75rem 1rem', background: '#fdf2f2', borderRadius: '3px', border: '1px solid #f5c6cb', marginBottom: '1rem' }}>{error}</div>}
-          {success && <div style={{ fontSize: '13px', color: '#16a34a', padding: '0.75rem 1rem', background: '#f0fdf4', borderRadius: '3px', border: '1px solid #bbf7d0', marginBottom: '1rem' }}>Product updated successfully.</div>}
+          {/* Brand guidelines */}
+          <div style={sec}>
+            <div style={secLbl}>Brand guidelines <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={lbl}>Brand guidelines</label>
+                <textarea style={{ ...inp, minHeight: '80px', resize: 'vertical' }} value={form.brand_guidelines} onChange={e => set('brand_guidelines', e.target.value)} placeholder="Tone, messaging, dos and don'ts for affiliates…" />
+              </div>
+              <div>
+                <label style={lbl}>Prohibited terms</label>
+                <input style={inp} value={form.prohibited_terms} onChange={e => set('prohibited_terms', e.target.value)} placeholder="e.g. cure, guaranteed, free" />
+              </div>
+            </div>
+          </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <Link href="/vendor/products" style={{ fontSize: '13px', fontWeight: 500, color: '#888', border: '1px solid #e8e6e2', padding: '0.7rem 1.5rem', borderRadius: '3px', textDecoration: 'none', background: '#ffffff' }}>Cancel</Link>
-            <button type="submit" disabled={saving} style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: saving ? '#888' : '#0d0d0d', border: 'none', padding: '0.7rem 2rem', borderRadius: '3px', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-              {saving ? 'Saving...' : 'Save changes'}
-            </button>
+          {/* Submit / delete */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              {confirmDelete ? (
+                <>
+                  <span style={{ fontSize: '13px', color: '#dc2626' }}>Are you sure? This cannot be undone.</span>
+                  <button type="button" onClick={handleDelete} disabled={deleting}
+                    style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#dc2626', padding: '0.6rem 1.25rem', borderRadius: '3px', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {deleting ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                  <button type="button" onClick={() => setConfirmDelete(false)}
+                    style={{ fontSize: '13px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={handleDelete}
+                  style={{ fontSize: '13px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                  Delete listing
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <Link href={isAdmin ? '/admin/products' : '/vendor/products'} style={{ fontSize: '13px', color: '#888', padding: '0.7rem 1.5rem', textDecoration: 'none', fontFamily: 'inherit' }}>Cancel</Link>
+              <button type="submit" disabled={saving}
+                style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: '#0d0d0d', padding: '0.7rem 1.75rem', borderRadius: '3px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
