@@ -1,7 +1,5 @@
 // src/app/api/conversions/route.ts
 // Low-trust pixel endpoint — called by track.js from vendor's confirmation page.
-// No shared secret needed (runs server-side). Lower trust than /api/postback
-// but safe because no secret is exposed to the browser.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-server'
@@ -9,18 +7,28 @@ import { createHash } from 'crypto'
 
 export const runtime = 'nodejs'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body     = await req.json()
     const { ref, order_id, amount, page_url } = body
 
     if (!ref || !order_id || typeof amount !== 'number' || amount <= 0) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400, headers: CORS_HEADERS })
     }
 
     const supabase = createServiceClient()
 
-    // ── Deduplicate ────────────────────────────────────────────────────────
+    // Deduplicate
     const { data: existing } = await supabase
       .from('conversions')
       .select('id')
@@ -28,10 +36,10 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (existing) {
-      return NextResponse.json({ ok: true, duplicate: true })
+      return NextResponse.json({ ok: true, duplicate: true }, { headers: CORS_HEADERS })
     }
 
-    // ── Resolve tracking code → link + product (matches postback pattern) ──
+    // Resolve tracking code → link + product
     const { data: link, error: linkError } = await supabase
       .from('affiliate_links')
       .select(`
@@ -49,7 +57,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (linkError || !link || !link.products) {
-      return NextResponse.json({ error: 'Unknown tracking code' }, { status: 404 })
+      return NextResponse.json({ error: 'Unknown tracking code' }, { status: 404, headers: CORS_HEADERS })
     }
 
     const product = link.products as unknown as {
@@ -60,20 +68,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (product.status !== 'active') {
-      return NextResponse.json({ error: 'Product no longer active' }, { status: 410 })
+      return NextResponse.json({ error: 'Product no longer active' }, { status: 410, headers: CORS_HEADERS })
     }
 
-    // ── Calculate commission ───────────────────────────────────────────────
+    // Calculate commission
     const commissionRate   = product.commission_rate
     const commissionAmount = Math.round(amount * commissionRate * 100) / 100
     const platformFee      = Math.round(amount * 0.10 * 100) / 100
 
-    // ── Hash IP for fraud detection ────────────────────────────────────────
+    // Hash IP
     const forwarded = req.headers.get('x-forwarded-for')
     const ip        = forwarded ? forwarded.split(',')[0].trim() : 'unknown'
     const ipHash    = createHash('sha256').update(ip).digest('hex')
 
-    // ── Insert conversion ──────────────────────────────────────────────────
+    // Insert conversion
     const { data: conversion, error: insertError } = await supabase
       .from('conversions')
       .insert({
@@ -96,29 +104,18 @@ export async function POST(req: NextRequest) {
       .single()
 
     if ((insertError as any)?.code === '23505') {
-      return NextResponse.json({ ok: true, duplicate: true })
+      return NextResponse.json({ ok: true, duplicate: true }, { headers: CORS_HEADERS })
     }
 
     if (insertError || !conversion) {
       console.error('[conversions pixel] insert error:', insertError)
-      return NextResponse.json({ error: 'Failed to record conversion' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to record conversion' }, { status: 500, headers: CORS_HEADERS })
     }
 
-    return NextResponse.json({ ok: true, conversion_id: conversion.id })
+    return NextResponse.json({ ok: true, conversion_id: conversion.id }, { headers: CORS_HEADERS })
+
   } catch (err) {
     console.error('[conversions pixel] error:', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error' }, { status: 500, headers: CORS_HEADERS })
   }
-}
-
-// CORS — vendor sites need to POST from their browser
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin':  '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  })
 }
