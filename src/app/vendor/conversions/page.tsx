@@ -1,12 +1,13 @@
-'use client'
-
 // src/app/vendor/conversions/page.tsx
+// Updated: "Approve & Pay" triggers Stripe charge-and-pay automatically
+
+'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { Resend } from 'resend'
 import VendorNav from '@/components/VendorNav'
+import Link from 'next/link'
 
 type ConversionStatus = 'pending' | 'approved' | 'paid' | 'disputed'
 
@@ -21,6 +22,7 @@ interface Conversion {
   source: 'pixel' | 'stripe' | null
   converted_at: string
   affiliate_name: string | null
+  affiliate_connect_onboarded: boolean
   product_title: string | null
 }
 
@@ -47,15 +49,15 @@ export default function VendorConversionsPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const [conversions, setConversions]     = useState<Conversion[]>([])
-  const [tab, setTab]                     = useState<ConversionStatus | 'all'>('pending')
-  const [loading, setLoading]             = useState(true)
-  const [busy, setBusy]                   = useState<string | null>(null)
-  const [toast, setToast]                 = useState<{ msg: string; ok: boolean } | null>(null)
+  const [conversions, setConversions]       = useState<Conversion[]>([])
+  const [tab, setTab]                       = useState<ConversionStatus | 'all'>('pending')
+  const [loading, setLoading]               = useState(true)
+  const [busy, setBusy]                     = useState<string | null>(null)
+  const [toast, setToast]                   = useState<{ msg: string; ok: boolean } | null>(null)
   const [profileInitial, setProfileInitial] = useState('V')
-  const [vendorId, setVendorId]           = useState<string | null>(null)
-  const [vendorName, setVendorName]       = useState<string>('')
-  const [session, setSession]             = useState<any>(null)
+  const [vendorId, setVendorId]             = useState<string | null>(null)
+  const [session, setSession]               = useState<any>(null)
+  const [hasPaymentMethod, setHasPaymentMethod] = useState<boolean | null>(null)
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -74,15 +76,18 @@ export default function VendorConversionsPage() {
         .eq('id', sess.user.id)
         .single()
 
-      // Allow vendor OR admin
       if (!profile || !['vendor', 'admin'].includes(profile.role)) {
-        router.push('/')
-        return
+        router.push('/'); return
       }
 
       setProfileInitial(profile.full_name?.charAt(0)?.toUpperCase() ?? 'V')
-      setVendorName(profile.full_name ?? '')
       setVendorId(sess.user.id)
+
+      // Check vendor payment method
+      fetch('/api/stripe/vendor-setup', {
+        headers: { Authorization: `Bearer ${sess.access_token}` }
+      }).then(r => r.json()).then(data => setHasPaymentMethod(data.has_payment_method))
+
       fetchConversions(sess.user.id)
     }
     init()
@@ -96,7 +101,7 @@ export default function VendorConversionsPage() {
       .select(`
         id, order_id, sale_amount, commission_rate, commission_amount,
         platform_fee, status, source, converted_at,
-        profiles!affiliate_id ( full_name ),
+        profiles!affiliate_id ( full_name, stripe_connect_onboarded ),
         products ( title )
       `)
       .order('converted_at', { ascending: false })
@@ -109,55 +114,62 @@ export default function VendorConversionsPage() {
       setConversions(
         data.map((r: any) => ({
           ...r,
-          affiliate_name: r.profiles?.full_name ?? null,
-          product_title:  r.products?.title     ?? null,
+          affiliate_name:              r.profiles?.full_name             ?? null,
+          affiliate_connect_onboarded: r.profiles?.stripe_connect_onboarded ?? false,
+          product_title:               r.products?.title                 ?? null,
         }))
       )
     }
     setLoading(false)
   }, [supabase])
 
+  // Approve + pay in one click via Stripe
+  const handleApproveAndPay = async (conversion: Conversion) => {
+    if (!session) return
+    setBusy(conversion.id)
+
+    try {
+      const res = await fetch('/api/stripe/charge-and-pay', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ conversion_id: conversion.id }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        setConversions(prev => prev.map(c => c.id === conversion.id ? { ...c, status: 'paid' } : c))
+        showToast(`✓ Paid ${fmt(conversion.commission_amount)} to ${conversion.affiliate_name ?? 'affiliate'} automatically.`, true)
+      } else {
+        if (data.code === 'NO_PAYMENT_METHOD') {
+          showToast('Add a payment method in Settings first.', false)
+        } else if (data.code === 'AFFILIATE_NOT_CONNECTED') {
+          showToast('Affiliate hasn\'t connected their Stripe account yet.', false)
+        } else {
+          showToast(data.error ?? 'Payment failed. Try again.', false)
+        }
+      }
+    } catch {
+      showToast('Network error. Please try again.', false)
+    }
+
+    setBusy(null)
+  }
+
+  // Dispute only
   const updateStatus = async (id: string, status: ConversionStatus) => {
     setBusy(id + status)
-
     const { error } = await supabase
       .from('conversions')
-      .update({ status, ...(status === 'paid' ? { paid_at: new Date().toISOString() } : {}) })
+      .update({ status })
       .eq('id', id)
 
     if (!error) {
       setConversions(prev => prev.map(c => c.id === id ? { ...c, status } : c))
-
-      // When vendor marks paid → email admin for platform fee invoice
-      if (status === 'paid') {
-        const conv = conversions.find(c => c.id === id)
-        if (conv && session) {
-          fetch('/api/vendor/notify-paid', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              conversion_id:     conv.id,
-              order_id:          conv.order_id,
-              sale_amount:       conv.sale_amount,
-              commission_amount: conv.commission_amount,
-              platform_fee:      conv.platform_fee,
-              affiliate_name:    conv.affiliate_name,
-              product_title:     conv.product_title,
-              vendor_name:       vendorName,
-            }),
-          }).catch(() => {})
-        }
-      }
-
-      showToast(
-        status === 'approved' ? 'Sale approved — affiliate notified.' :
-        status === 'paid'     ? 'Marked as paid. Platform fee invoice sent.' :
-                                'Sale disputed.',
-        true
-      )
+      showToast('Sale disputed.', true)
     } else {
       showToast('Something went wrong.', false)
     }
@@ -166,17 +178,17 @@ export default function VendorConversionsPage() {
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok })
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), 5000)
   }
 
   const filtered = tab === 'all' ? conversions : conversions.filter(c => c.status === tab)
 
   const stats = {
-    pendingCount: conversions.filter(c => c.status === 'pending').length,
-    owedTotal:    conversions.filter(c => c.status === 'approved').reduce((s, c) => s + c.commission_amount, 0),
-    paidTotal:    conversions.filter(c => c.status === 'paid').reduce((s, c) => s + c.commission_amount, 0),
-    gmv:          conversions.filter(c => ['approved','paid'].includes(c.status)).reduce((s, c) => s + c.sale_amount, 0),
+    pendingCount:    conversions.filter(c => c.status === 'pending').length,
+    owedTotal:       conversions.filter(c => c.status === 'approved').reduce((s, c) => s + c.commission_amount, 0),
     platformFeeOwed: conversions.filter(c => c.status === 'approved').reduce((s, c) => s + c.platform_fee, 0),
+    paidTotal:       conversions.filter(c => c.status === 'paid').reduce((s, c) => s + c.commission_amount, 0),
+    gmv:             conversions.filter(c => ['approved','paid'].includes(c.status)).reduce((s, c) => s + c.sale_amount, 0),
   }
 
   if (loading) return (
@@ -201,32 +213,27 @@ export default function VendorConversionsPage() {
         .vc-tr:hover { background: #faf9f7; }
         .vc-td       { padding: 0.875rem 1rem; vertical-align: middle; }
         .vc-pill     { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.73rem; font-weight: 500; }
-        .vc-btn      { border: none; border-radius: 4px; color: #fff; padding: 0.3rem 0.75rem; font-size: 0.76rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; font-family: var(--font-dm-sans), sans-serif; }
+        .vc-btn      { border: none; border-radius: 4px; color: #fff; padding: 0.3rem 0.75rem; font-size: 0.76rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; font-family: var(--font-dm-sans), sans-serif; white-space: nowrap; }
         .vc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .vc-actions  { display: flex; gap: 0.35rem; align-items: center; }
-        @media (max-width: 900px) {
-          .vc-stats { grid-template-columns: repeat(3, 1fr); }
-        }
-        @media (max-width: 768px) {
-          .vc-content { padding: 1.25rem 1rem; }
-          .vc-stats   { grid-template-columns: repeat(2, 1fr); }
-        }
+        .vc-actions  { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
+        @media (max-width: 900px) { .vc-stats { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .vc-content { padding: 1.25rem 1rem; } .vc-stats { grid-template-columns: repeat(2, 1fr); } }
       `}</style>
 
       {toast && (
-        <div style={{ position: 'fixed', bottom: '1.5rem', right: '1.5rem', background: toast.ok ? '#0d0d0d' : '#7f1d1d', color: '#fff', padding: '0.75rem 1.25rem', borderRadius: 6, fontSize: '0.875rem', zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
-          {toast.ok ? '✓' : '✗'} {toast.msg}
+        <div style={{ position: 'fixed', bottom: '1.5rem', right: '1.5rem', background: toast.ok ? '#0d0d0d' : '#7f1d1d', color: '#fff', padding: '0.75rem 1.25rem', borderRadius: 6, fontSize: '0.875rem', zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,0.2)', maxWidth: '360px' }}>
+          {toast.msg}
         </div>
       )}
 
       <VendorNav profileInitial={profileInitial} onSignOut={handleSignOut} />
 
       <div className="vc-content">
-        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#888', fontWeight: 500, marginBottom: '0.4rem' }}>Vendor</div>
             <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2rem', fontWeight: 500, margin: 0 }}>Conversions</h1>
-            <p style={{ color: '#888', fontSize: '13px', marginTop: '0.3rem' }}>Review, approve, and pay your affiliates.</p>
+            <p style={{ color: '#888', fontSize: '13px', marginTop: '0.3rem' }}>Review affiliate sales and trigger automatic payouts.</p>
           </div>
           <button onClick={() => vendorId && fetchConversions(vendorId)}
             style={{ background: 'transparent', border: '1px solid #e8e6e2', borderRadius: 4, padding: '0.4rem 0.9rem', cursor: 'pointer', fontSize: '13px', color: '#888', fontFamily: 'inherit' }}>
@@ -234,21 +241,22 @@ export default function VendorConversionsPage() {
           </button>
         </div>
 
-        {/* Platform fee notice if there are approved conversions */}
-        {stats.platformFeeOwed > 0 && (
-          <div style={{ background: '#fef9ec', border: '1px solid #fde68a', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>Platform fee due to UGCA: <strong>{fmt(stats.platformFeeOwed)}</strong> — payable after you mark commissions as paid.</span>
+        {/* No payment method warning */}
+        {hasPaymentMethod === false && (
+          <div style={{ background: '#fef9ec', border: '1px solid #fde68a', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span>⚠️ Add a payment method to enable automatic affiliate payouts.</span>
+            <Link href="/vendor/settings" style={{ fontSize: '13px', fontWeight: 600, color: '#92400e', textDecoration: 'underline' }}>Add card →</Link>
           </div>
         )}
 
         {/* Stats */}
         <div className="vc-stats">
           {[
-            { label: 'Pending Approval',   value: String(stats.pendingCount), color: '#b45309' },
-            { label: 'Commissions Owed',   value: fmt(stats.owedTotal),       color: '#dc2626' },
-            { label: 'Platform Fee Owed',  value: fmt(stats.platformFeeOwed), color: '#7c3aed' },
-            { label: 'Commissions Paid',   value: fmt(stats.paidTotal),       color: '#16a34a' },
-            { label: 'Confirmed GMV',      value: fmt(stats.gmv),             color: '#0d0d0d' },
+            { label: 'Pending Approval',  value: String(stats.pendingCount), color: '#b45309' },
+            { label: 'Commissions Owed',  value: fmt(stats.owedTotal),       color: '#dc2626' },
+            { label: 'Platform Fee Owed', value: fmt(stats.platformFeeOwed), color: '#7c3aed' },
+            { label: 'Commissions Paid',  value: fmt(stats.paidTotal),       color: '#16a34a' },
+            { label: 'Confirmed GMV',     value: fmt(stats.gmv),             color: '#0d0d0d' },
           ].map(s => (
             <div key={s.label} className="vc-stat" style={{ borderTop: `3px solid ${s.color}` }}>
               <div style={{ fontSize: '1.5rem', fontFamily: 'var(--font-cormorant), serif', fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
@@ -290,7 +298,12 @@ export default function VendorConversionsPage() {
                 {filtered.map(c => (
                   <tr key={c.id} className="vc-tr">
                     <td className="vc-td" style={{ fontWeight: 500 }}>{c.product_title ?? '—'}</td>
-                    <td className="vc-td" style={{ color: '#555' }}>{c.affiliate_name ?? '—'}</td>
+                    <td className="vc-td">
+                      <div style={{ color: '#555' }}>{c.affiliate_name ?? '—'}</div>
+                      {!c.affiliate_connect_onboarded && c.status === 'pending' && (
+                        <div style={{ fontSize: '10px', color: '#f59e0b', marginTop: '2px' }}>⚠ Not connected to Stripe</div>
+                      )}
+                    </td>
                     <td className="vc-td" style={{ fontFamily: 'monospace' }}>{fmt(c.sale_amount)}</td>
                     <td className="vc-td" style={{ fontFamily: 'monospace', color: '#16a34a', fontWeight: 600 }}>{fmt(c.commission_amount)}</td>
                     <td className="vc-td" style={{ fontFamily: 'monospace', color: '#7c3aed', fontSize: '12px' }}>{fmt(c.platform_fee)}</td>
@@ -309,17 +322,25 @@ export default function VendorConversionsPage() {
                       <div className="vc-actions">
                         {c.status === 'pending' && (
                           <>
-                            <button className="vc-btn" style={{ background: '#16a34a' }} disabled={busy === c.id + 'approved'} onClick={() => updateStatus(c.id, 'approved')}>
-                              {busy === c.id + 'approved' ? '…' : 'Approve'}
+                            <button className="vc-btn"
+                              style={{ background: c.affiliate_connect_onboarded && hasPaymentMethod ? '#16a34a' : '#9ca3af' }}
+                              disabled={busy === c.id || !c.affiliate_connect_onboarded || !hasPaymentMethod}
+                              title={!c.affiliate_connect_onboarded ? 'Affiliate must connect Stripe first' : !hasPaymentMethod ? 'Add a payment method in Settings' : ''}
+                              onClick={() => handleApproveAndPay(c)}>
+                              {busy === c.id ? '…' : 'Approve & Pay'}
                             </button>
-                            <button className="vc-btn" style={{ background: '#888' }} disabled={busy === c.id + 'disputed'} onClick={() => updateStatus(c.id, 'disputed')}>
+                            <button className="vc-btn" style={{ background: '#888' }}
+                              disabled={busy === c.id + 'disputed'}
+                              onClick={() => updateStatus(c.id, 'disputed')}>
                               {busy === c.id + 'disputed' ? '…' : 'Dispute'}
                             </button>
                           </>
                         )}
                         {c.status === 'approved' && (
-                          <button className="vc-btn" style={{ background: '#0d0d0d' }} disabled={busy === c.id + 'paid'} onClick={() => updateStatus(c.id, 'paid')}>
-                            {busy === c.id + 'paid' ? '…' : 'Mark Paid'}
+                          <button className="vc-btn" style={{ background: '#16a34a' }}
+                            disabled={busy === c.id}
+                            onClick={() => handleApproveAndPay(c)}>
+                            {busy === c.id ? '…' : 'Pay now'}
                           </button>
                         )}
                         {(c.status === 'paid' || c.status === 'disputed') && (
