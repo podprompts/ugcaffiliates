@@ -47,19 +47,39 @@ export default function VendorAffiliatesPage() {
       const productIds = (products ?? []).map((p: any) => p.id)
       if (productIds.length === 0) { setLoading(false); return }
 
-      const { data } = await supabase
+      // ── Step 1: fetch applications + products (no profile join) ──────────
+      const { data: apps } = await supabase
         .from('affiliate_applications')
-        .select('id, status, applied_at, reviewed_at, message, profiles!affiliate_id(id, full_name), products(id, title, commission_rate)')
+        .select('id, status, applied_at, reviewed_at, message, affiliate_id, products(id, title, commission_rate)')
         .in('product_id', productIds)
         .order('applied_at', { ascending: false })
 
-      setApplications(data ?? [])
+      if (!apps || apps.length === 0) { setLoading(false); return }
+
+      // ── Step 2: fetch affiliate profiles separately ───────────────────────
+      const affiliateIds = [...new Set(apps.map((a: any) => a.affiliate_id))]
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', affiliateIds)
+
+      const profilesMap: Record<string, string> = {}
+      for (const p of profilesData ?? []) {
+        profilesMap[p.id] = p.full_name ?? 'Unknown'
+      }
+
+      // ── Step 3: merge ─────────────────────────────────────────────────────
+      const merged = apps.map((a: any) => ({
+        ...a,
+        affiliate_name: profilesMap[a.affiliate_id] ?? 'Unknown',
+      }))
+
+      setApplications(merged)
       setLoading(false)
     }
     load()
   }, [])
 
-  // ── Calls the API route which creates the affiliate link on approval ────────
   async function handleAction(id: string, action: 'approved' | 'rejected') {
     if (!session) return
     setActioning(id)
@@ -82,7 +102,6 @@ export default function VendorAffiliatesPage() {
       return
     }
 
-    // Update local state optimistically
     setApplications(prev =>
       prev.map(a => a.id === id ? { ...a, status: action, reviewed_at: new Date().toISOString() } : a)
     )
@@ -153,19 +172,20 @@ export default function VendorAffiliatesPage() {
                   ))}
                 </div>
                 {filtered.map(a => {
-                  const affiliate = a.profiles as any
                   const product = a.products as any
                   const date = new Date(a.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                   const isActioning = actioning === a.id
+                  const name = a.affiliate_name ?? 'Unknown'
+                  const initial = name.charAt(0).toUpperCase()
 
                   return (
                     <div key={a.id} className="va-table-row">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                         <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f2f0ec', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, flexShrink: 0 }}>
-                          {affiliate?.full_name?.charAt(0)?.toUpperCase() ?? '?'}
+                          {initial}
                         </div>
                         <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {affiliate?.full_name ?? 'Unknown'}
+                          {name}
                         </div>
                       </div>
 
@@ -187,37 +207,25 @@ export default function VendorAffiliatesPage() {
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                         {a.status === 'pending' && (
                           <>
-                            <button
-                              onClick={() => handleAction(a.id, 'approved')}
-                              disabled={isActioning}
-                              style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', background: isActioning ? '#888' : '#0d0d0d', border: 'none', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                            >
+                            <button onClick={() => handleAction(a.id, 'approved')} disabled={isActioning}
+                              style={{ fontSize: '12px', fontWeight: 600, color: '#ffffff', background: isActioning ? '#888' : '#0d0d0d', border: 'none', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
                               {isActioning ? '…' : 'Approve'}
                             </button>
-                            <button
-                              onClick={() => handleAction(a.id, 'rejected')}
-                              disabled={isActioning}
-                              style={{ fontSize: '12px', color: '#888', background: 'none', border: '1px solid #e8e6e2', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                            >
+                            <button onClick={() => handleAction(a.id, 'rejected')} disabled={isActioning}
+                              style={{ fontSize: '12px', color: '#888', background: 'none', border: '1px solid #e8e6e2', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
                               Decline
                             </button>
                           </>
                         )}
                         {a.status === 'approved' && (
-                          <button
-                            onClick={() => handleAction(a.id, 'rejected')}
-                            disabled={isActioning}
-                            style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: '1px solid #fecaca', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                          >
+                          <button onClick={() => handleAction(a.id, 'rejected')} disabled={isActioning}
+                            style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: '1px solid #fecaca', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
                             {isActioning ? '…' : 'Revoke'}
                           </button>
                         )}
                         {a.status === 'rejected' && (
-                          <button
-                            onClick={() => handleAction(a.id, 'approved')}
-                            disabled={isActioning}
-                            style={{ fontSize: '12px', color: '#16a34a', background: 'none', border: '1px solid #bbf7d0', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-                          >
+                          <button onClick={() => handleAction(a.id, 'approved')} disabled={isActioning}
+                            style={{ fontSize: '12px', color: '#16a34a', background: 'none', border: '1px solid #bbf7d0', padding: '0.35rem 0.85rem', borderRadius: '3px', cursor: isActioning ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
                             {isActioning ? '…' : 'Re-approve'}
                           </button>
                         )}
