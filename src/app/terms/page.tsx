@@ -66,7 +66,7 @@ export default function TermsPage() {
     {
       id: '',
       title: '13. Intellectual Property',
-      body: `The UGCAffiliates Platform, including its design, software, trademarks, and content, is owned by HONNYDO LLC d/b/a AI Digital Products. Users may not copy, reproduce, or create derivative works from the Platform without written permission. Users retain ownership of content they submit but grant UGCA a worldwide, royalty-free license to use that content to operate the Platform.`
+      body: `The UGCAffiliates Platform, including its design, software, trademarks, and content, is owned by HONNYDO LLC d/b/a. Users may not copy, reproduce, or create derivative works from the Platform without written permission. Users retain ownership of content they submit but grant UGCA a worldwide, royalty-free license to use that content to operate the Platform.`
     },
     {
       id: '',
@@ -110,7 +110,7 @@ export default function TermsPage() {
         <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2.5rem', fontWeight: 500, marginBottom: '0.5rem' }}>Terms of Service</h1>
         <p style={{ fontSize: '13px', color: '#888', marginBottom: '0.5rem' }}>Last updated: May 2026</p>
         <p style={{ fontSize: '13px', color: '#3a3a3a', marginBottom: '3rem', lineHeight: 1.7 }}>
-          These Terms govern your use of UGCAffiliates, operated by HONNYDO LLC d/b/a AI Digital Products. Please read them carefully before creating an account.
+          These Terms govern your use of UGCAffiliates, operated by HONNYDO LLC d/b/a. Please read them carefully before creating an account.
         </p>
 
         {/* Quick nav */}

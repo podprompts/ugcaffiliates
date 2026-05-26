@@ -5,7 +5,7 @@ export default function PrivacyPage() {
   const sections = [
     {
       title: '1. Who We Are',
-      body: `UGCAffiliates is operated by HONNYDO LLC d/b/a AI Digital Products ("UGCA," "we," "us," or "our"), based in Tempe, Arizona. We operate the affiliate marketing marketplace at ugcaffiliates.com.\n\nThis Privacy Policy explains how we collect, use, store, and protect your personal information when you use our Platform. By using UGCAffiliates, you agree to the practices described here.`
+      body: `UGCAffiliates is operated by HONNYDO LLC d/b/a ("UGCA," "we," "us," or "our"), based in Tempe, Arizona. We operate the affiliate marketing marketplace at ugcaffiliates.com.\n\nThis Privacy Policy explains how we collect, use, store, and protect your personal information when you use our Platform. By using UGCAffiliates, you agree to the practices described here.`
     },
     {
       title: '2. Information We Collect',
@@ -57,7 +57,7 @@ export default function PrivacyPage() {
     },
     {
       title: '14. Contact Us',
-      body: `For privacy-related questions, requests, or concerns:\n\nHONNYDO LLC d/b/a AI Digital Products\nTempe, Arizona, United States\nEmail: privacy@ugcaffiliates.com\nContact form: ugcaffiliates.com/contact\n\nFor general support, visit our Contact page.`
+      body: `For privacy-related questions, requests, or concerns:\n\nHONNYDO LLC d/b/a\nTempe, Arizona, United States\nEmail: privacy@ugcaffiliates.com\nContact form: ugcaffiliates.com/contact\n\nFor general support, visit our Contact page.`
     },
   ]
 

@@ -95,12 +95,10 @@ export default async function HomePage() {
   return (
     <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', background: '#faf9f7', color: '#1a1a1a', overflowX: 'hidden' }}>
       <style>{`
-        /* ── Invite banner ── */
         .invite-banner { background: #f0ece5; border-bottom: 1px solid #e8e4de; padding: 10px 2.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.invite-banner-text { font-size: 12px; color: #888; letter-spacing: 0.03em; flex: 1; }
-.invite-banner-link { font-size: 12px; color: #1a1a1a; font-weight: 600; letter-spacing: 0.06em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+        .invite-banner-text { font-size: 12px; color: #888; letter-spacing: 0.03em; flex: 1; }
+        .invite-banner-link { font-size: 12px; color: #1a1a1a; font-weight: 600; letter-spacing: 0.06em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 
-        /* ── Hero ── */
         .hero { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #e8e4de; align-items: stretch; }
         .hero-left { padding: 72px 48px 72px 2.5rem; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid #e8e4de; }
         .hero-eyebrow { font-size: 10px; letter-spacing: 0.22em; color: #b5a99a; text-transform: uppercase; margin-bottom: 20px; }
@@ -110,61 +108,41 @@ export default async function HomePage() {
         .hero-right { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background-color: #e8e4de; }
         .hero-video-cell { overflow: hidden; background: #1a1a1a; aspect-ratio: 3/4; }
         .hero-video-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .hero-desktop-cell { display: block; }
+        .hero-mobile-overlay { display: none; }
 
-        /* ── Buttons ── */
         .btn-primary { background: #1a1a1a; color: #faf9f7; font-size: 11px; font-weight: 600; padding: 10px 24px; border: 1px solid #1a1a1a; cursor: pointer; letter-spacing: 0.08em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
-        .btn-outline { background: none; color: #1a1a1a; font-size: 11px; font-weight: 600; padding: 10px 24px; border: 1px solid #1a1a1a; cursor: pointer; letter-spacing: 0.08em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
         .btn-ghost { background: none; color: #888; font-size: 11px; font-weight: 500; padding: 10px 24px; border: 1px solid #e0dbd4; cursor: pointer; letter-spacing: 0.06em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
 
-        /* ── Stat bar ── */
         .stat-bar { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #e8e4de; }
         .stat-cell { padding: 28px 24px; border-right: 1px solid #e8e4de; text-align: center; background: #faf9f7; }
         .stat-cell:last-child { border-right: none; }
         .stat-val { font-family: var(--font-cormorant), serif; font-size: 2rem; font-weight: 400; color: #1a1a1a; letter-spacing: -0.02em; margin-bottom: 4px; }
         .stat-label { font-size: 10px; color: #b5a99a; letter-spacing: 0.12em; text-transform: uppercase; }
 
-        /* ── Category pills ── */
         .pill-row { display: flex; gap: 8px; padding: 20px 2.5rem; border-bottom: 1px solid #e8e4de; overflow-x: auto; scrollbar-width: none; background: #faf9f7; }
         .pill-row::-webkit-scrollbar { display: none; }
         .pill { font-size: 11px; color: #888; border: 1px solid #e0dbd4; padding: 6px 18px; cursor: pointer; white-space: nowrap; letter-spacing: 0.04em; background: #faf9f7; text-decoration: none; display: inline-block; }
         .pill:hover { border-color: #1a1a1a; color: #1a1a1a; }
 
-        /* ── Section ── */
         .section { padding: 52px 2.5rem; border-bottom: 1px solid #e8e4de; }
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 32px; }
         .section-title { font-family: var(--font-cormorant), serif; font-size: 1.75rem; font-weight: 400; color: #1a1a1a; letter-spacing: -0.01em; }
         .section-link { font-size: 11px; color: #b5a99a; letter-spacing: 0.08em; text-decoration: none; }
         .section-link:hover { color: #1a1a1a; }
 
-        /* ── Product grid ── */
-        .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #e8e4de; }
-        .product-card { background: #faf9f7; }
-        .product-img { background: #f0ece5; aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        .product-img-inner { width: 52%; height: 52%; background: #ddd8cf; }
-        .product-badge { position: absolute; top: 12px; left: 12px; background: #1a1a1a; color: #faf9f7; font-size: 9px; font-weight: 600; padding: 3px 9px; letter-spacing: 0.1em; }
-        .product-info { padding: 16px 18px; }
-        .product-cat { font-size: 10px; color: #b5a99a; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 6px; }
-        .product-title { font-family: var(--font-cormorant), serif; font-size: 1.1rem; font-weight: 400; color: #1a1a1a; margin-bottom: 4px; line-height: 1.3; }
-        .product-vendor { font-size: 11px; color: #b5a99a; margin-bottom: 12px; }
-        .product-commission { display: flex; align-items: center; justify-content: space-between; }
-        .comm-tag { font-size: 10px; color: #5a7a4a; background: #eef3e8; padding: 3px 9px; font-weight: 600; letter-spacing: 0.06em; }
-        .earn-amt { font-size: 13px; color: #1a1a1a; font-weight: 600; }
-
-        /* ── Category grid ── */
         .cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e8e4de; }
         .cat-card { background: #faf9f7; padding: 28px 24px; text-decoration: none; display: block; }
         .cat-card:hover { background: #f5f2ed; }
         .cat-name { font-family: var(--font-cormorant), serif; font-size: 1.15rem; font-weight: 400; color: #1a1a1a; margin-bottom: 5px; }
         .cat-count { font-size: 11px; color: #b5a99a; letter-spacing: 0.04em; }
 
-        /* ── How it works ── */
         .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
         .how-num { font-family: var(--font-cormorant), serif; font-size: 3rem; font-weight: 400; color: #e8e4de; line-height: 1; margin-bottom: 14px; }
         .how-title { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
         .how-body { font-size: 13px; color: #888; line-height: 1.75; }
         .how-tag { display: inline-block; margin-top: 14px; font-size: 10px; color: #b5a99a; border: 1px solid #e8e4de; padding: 3px 10px; letter-spacing: 0.08em; }
 
-        /* ── Editorial split ── */
         .editorial { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #e8e4de; border-bottom: 1px solid #e8e4de; }
         .edit-pane { padding: 52px 2.5rem; }
         .edit-eyebrow { font-size: 10px; letter-spacing: 0.2em; color: #b5a99a; text-transform: uppercase; margin-bottom: 16px; }
@@ -174,7 +152,6 @@ export default async function HomePage() {
         .edit-feature { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #888; }
         .edit-dot { width: 3px; height: 3px; background: #b5a99a; border-radius: 50%; flex-shrink: 0; }
 
-        /* ── AI strip ── */
         .ai-strip { background: #1a1a1a; padding: 52px 2.5rem; border-bottom: 1px solid #1a1a1a; }
         .ai-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 4rem; align-items: center; }
         .ai-eyebrow { font-size: 10px; letter-spacing: 0.2em; color: #444; text-transform: uppercase; margin-bottom: 16px; }
@@ -188,19 +165,33 @@ export default async function HomePage() {
         .ai-text { font-size: 13px; color: #666; line-height: 1.6; }
         .ai-meta { font-size: 10px; color: #2a2a2a; margin-top: 6px; }
 
-        /* ── CTA ── */
         .cta { padding: 80px 2.5rem; text-align: center; background: #1a1a1a; }
         .cta-eyebrow { font-size: 10px; letter-spacing: 0.22em; color: #444; text-transform: uppercase; margin-bottom: 16px; }
         .cta-h2 { font-family: var(--font-cormorant), serif; font-size: 3rem; font-weight: 400; color: #faf9f7; margin-bottom: 12px; letter-spacing: -0.01em; line-height: 1.1; }
         .cta-sub { font-size: 13px; color: #555; margin-bottom: 32px; line-height: 1.7; }
         .cta-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
-        /* ── Footer ── */
         .footer { border-top: 1px solid #2a2a2a; background: #1a1a1a; padding: 24px 2.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
         .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
         .footer-links a { font-size: 11px; color: #444; text-decoration: none; letter-spacing: 0.04em; }
         .footer-links a:hover { color: #888; }
         .footer-copy { font-size: 11px; color: #333; }
+
+        /* ── Mobile overlay hero styles ── */
+        .mobile-hero-track { display: flex; will-change: transform; }
+        .mobile-hero-slide { flex-shrink: 0; width: 100%; position: relative; }
+        .mobile-hero-slide video { width: 100%; aspect-ratio: 9/14; object-fit: cover; display: block; }
+        .mobile-hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.42) 45%, rgba(0,0,0,0.08) 100%); pointer-events: none; }
+        .mobile-hero-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 20px 22px; }
+        .mobile-hero-eyebrow { font-size: 9px; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 10px; }
+        .mobile-hero-h1 { font-family: var(--font-cormorant), serif; font-size: 2.5rem; font-weight: 400; color: #ffffff; line-height: 1.08; margin-bottom: 10px; letter-spacing: -0.01em; }
+        .mobile-hero-sub { font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.65; margin-bottom: 18px; max-width: 34ch; }
+        .mobile-hero-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .mobile-btn-primary { background: #ffffff; color: #1a1a1a; font-size: 10px; font-weight: 700; padding: 9px 20px; letter-spacing: 0.08em; text-decoration: none; display: inline-block; }
+        .mobile-btn-ghost { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 500; padding: 9px 20px; border: 1px solid rgba(255,255,255,0.28); letter-spacing: 0.06em; text-decoration: none; display: inline-block; }
+        .mobile-hero-dots { position: absolute; right: 14px; top: 50%; transform: translateY(-60%); display: flex; flex-direction: column; gap: 5px; z-index: 2; }
+        .mobile-hero-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.35); border: none; padding: 0; cursor: pointer; transition: background 0.2s, height 0.2s; }
+        .mobile-hero-dot.active { background: #ffffff; height: 14px; border-radius: 2px; }
 
         /* ── Responsive ── */
         @media (max-width: 1024px) {
@@ -208,22 +199,16 @@ export default async function HomePage() {
         }
         @media (max-width: 768px) {
           .invite-banner { padding: 10px 1rem; }
-          .hero { grid-template-columns: 1fr; }
-          .hero-left { padding: 48px 1.5rem; border-right: none; border-bottom: 1px solid #e8e4de; }
-          .hero-right { display: block; position: relative; overflow: hidden; }
-          .hero-carousel { display: flex; transition: transform 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
-          .hero-carousel-slide { flex-shrink: 0; width: 75vw; aspect-ratio: 3/4; overflow: hidden; background: #1a1a1a; margin-right: 1px; }
-          .hero-carousel-slide video { width: 100%; height: 100%; object-fit: cover; display: block; }
-          .hero-carousel-dots { display: flex; justify-content: center; gap: 6px; padding: 12px 0; background: #faf9f7; }
-          .hero-carousel-dot { width: 5px; height: 5px; border-radius: 50%; background: #d0cbc2; border: none; padding: 0; cursor: pointer; transition: background 0.2s, width 0.2s; }
-          .hero-carousel-dot.active { background: #1a1a1a; width: 16px; border-radius: 3px; }
-          .hero-h1 { font-size: 2.5rem !important; }
-          .stat-bar { grid-template-columns: repeat(2, 1fr); }
-          .invite-banner { padding: 10px 1rem; }
           .invite-banner-text { font-size: 11px; }
           .invite-banner-link { font-size: 11px; white-space: nowrap; }
+          .hero { grid-template-columns: 1fr; border-bottom: none; }
+          .hero-left { display: none; }
+          .hero-right { display: block !important; background: none; border-bottom: 1px solid #e8e4de; }
+          .hero-desktop-cell { display: none !important; }
+          .hero-mobile-overlay { display: block; }
+          .stat-bar { grid-template-columns: repeat(2, 1fr); }
+          .pill-row { padding: 16px 1rem; }
           .section { padding: 36px 1.5rem; }
-          .product-grid { grid-template-columns: repeat(2, 1fr); }
           .cat-grid { grid-template-columns: repeat(2, 1fr); }
           .how-grid { grid-template-columns: 1fr; gap: 2rem; }
           .editorial { grid-template-columns: 1fr; }
@@ -233,7 +218,6 @@ export default async function HomePage() {
           .footer { padding: 20px 1.5rem; }
         }
         @media (max-width: 480px) {
-          .product-grid { grid-template-columns: 1fr; }
           .cat-grid { grid-template-columns: 1fr; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
         }
@@ -249,8 +233,9 @@ export default async function HomePage() {
 
       {/* Hero */}
       <div className="hero">
+        {/* Desktop left copy — hidden on mobile */}
         <div className="hero-left">
-          <div className="hero-eyebrow">Affiliate platform · Est. 2026</div>
+          <div className="hero-eyebrow">Affiliate platform · By Invite Only</div>
           <h1 className="hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
           <p className="hero-sub">A curated marketplace connecting vetted vendors with motivated creators. Apply to promote, share your link, collect commissions directly.</p>
           <div className="hero-btns">
@@ -258,23 +243,9 @@ export default async function HomePage() {
             <Link href="/marketplace" className="btn-ghost">Browse products</Link>
           </div>
         </div>
-        <div className="hero-right">
-          {/* Desktop: 2x2 grid */}
-          <div className="hero-video-cell" style={{ display: 'contents' } as any}>
-            <style>{`
-              @media (min-width: 769px) {
-                .hero-right { display: grid !important; grid-template-columns: 1fr 1fr; gap: 1px; background-color: #e8e4de; overflow: visible !important; }
-                .hero-desktop-cell { display: block !important; }
-                .hero-mobile-carousel { display: none !important; }
-              }
-              @media (max-width: 768px) {
-                .hero-desktop-cell { display: none !important; }
-                .hero-mobile-carousel { display: block !important; }
-              }
-            `}</style>
-          </div>
 
-          {/* Desktop cells */}
+        <div className="hero-right">
+          {/* Desktop 2x2 grid */}
           <div className="hero-desktop-cell hero-video-cell">
             <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
           </div>
@@ -288,138 +259,59 @@ export default async function HomePage() {
             <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
           </div>
 
-          {/* Mobile infinite swipe carousel */}
-          <div className="hero-mobile-carousel">
-            <div style={{ overflow: 'hidden', position: 'relative' }}>
-              <div id="ugca-carousel" className="hero-carousel">
-                {/* Cloned last slide at front for infinite feel */}
-                <div className="hero-carousel-slide">
+          {/* Mobile full-width overlay hero */}
+          <div className="hero-mobile-overlay">
+            <div style={{ position: 'relative', overflow: 'hidden' }}>
+              <div id="mobile-hero-track" className="mobile-hero-track">
+                {/* Clone of last for infinite loop */}
+                <div className="mobile-hero-slide">
                   <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
+                  <div className="mobile-hero-gradient" />
                 </div>
-                <div className="hero-carousel-slide">
+                <div className="mobile-hero-slide">
                   <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
+                  <div className="mobile-hero-gradient" />
                 </div>
-                <div className="hero-carousel-slide">
+                <div className="mobile-hero-slide">
                   <video autoPlay muted loop playsInline><source src="/hero2.mp4" type="video/mp4" /></video>
+                  <div className="mobile-hero-gradient" />
                 </div>
-                <div className="hero-carousel-slide">
+                <div className="mobile-hero-slide">
                   <video autoPlay muted loop playsInline><source src="/hero3.mp4" type="video/mp4" /></video>
+                  <div className="mobile-hero-gradient" />
                 </div>
-                <div className="hero-carousel-slide">
+                <div className="mobile-hero-slide">
                   <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
+                  <div className="mobile-hero-gradient" />
                 </div>
-                {/* Cloned first slide at end for infinite feel */}
-                <div className="hero-carousel-slide">
+                {/* Clone of first for infinite loop */}
+                <div className="mobile-hero-slide">
                   <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
+                  <div className="mobile-hero-gradient" />
+                </div>
+              </div>
+
+              {/* Vertical dot indicators */}
+              <div className="mobile-hero-dots">
+                <button className="mobile-hero-dot active" data-dot="0" />
+                <button className="mobile-hero-dot" data-dot="1" />
+                <button className="mobile-hero-dot" data-dot="2" />
+                <button className="mobile-hero-dot" data-dot="3" />
+              </div>
+
+              {/* Copy overlaid on video */}
+              <div className="mobile-hero-content">
+                <div className="mobile-hero-eyebrow">Affiliate platform · By invite only</div>
+                <h1 className="mobile-hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
+                <p className="mobile-hero-sub">A curated marketplace connecting vetted vendors with motivated creators.</p>
+                <div className="mobile-hero-btns">
+                  <Link href="/signup" className="mobile-btn-primary">Request access</Link>
+                  <Link href="/marketplace" className="mobile-btn-ghost">Browse products</Link>
                 </div>
               </div>
             </div>
-            <div className="hero-carousel-dots">
-              <button className="hero-carousel-dot active" data-dot="0" />
-              <button className="hero-carousel-dot" data-dot="1" />
-              <button className="hero-carousel-dot" data-dot="2" />
-              <button className="hero-carousel-dot" data-dot="3" />
-            </div>
           </div>
         </div>
-
-        <script dangerouslySetInnerHTML={{ __html: `
-          (function() {
-            function initCarousel() {
-              var track = document.getElementById('ugca-carousel');
-              if (!track) return;
-              var dots = document.querySelectorAll('.hero-carousel-dot');
-              var slideCount = 4;
-              var current = 0;
-              var slideW = 0;
-              var startX = 0;
-              var dragging = false;
-              var dragDelta = 0;
-              var transitioning = false;
-
-              function getSlideW() {
-                var s = track.querySelector('.hero-carousel-slide');
-                return s ? s.offsetWidth + 1 : window.innerWidth * 0.75;
-              }
-
-              function setPos(idx, animate) {
-                slideW = getSlideW();
-                track.style.transition = animate ? 'transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94)' : 'none';
-                track.style.transform = 'translateX(' + (-(idx + 1) * slideW) + 'px)';
-              }
-
-              function updateDots(idx) {
-                dots.forEach(function(d, i) {
-                  d.classList.toggle('active', i === idx);
-                });
-              }
-
-              function goTo(idx, animate) {
-                current = idx;
-                setPos(idx, animate !== false);
-                updateDots(((idx % slideCount) + slideCount) % slideCount);
-              }
-
-              setPos(0, false);
-
-              track.addEventListener('transitionend', function() {
-                if (current === slideCount) {
-                  goTo(0, false);
-                } else if (current === -1) {
-                  goTo(slideCount - 1, false);
-                }
-                transitioning = false;
-              });
-
-              track.addEventListener('touchstart', function(e) {
-                if (transitioning) return;
-                startX = e.touches[0].clientX;
-                dragging = true;
-                dragDelta = 0;
-                track.style.transition = 'none';
-              }, { passive: true });
-
-              track.addEventListener('touchmove', function(e) {
-                if (!dragging) return;
-                dragDelta = e.touches[0].clientX - startX;
-                slideW = getSlideW();
-                track.style.transform = 'translateX(' + (-(current + 1) * slideW + dragDelta) + 'px)';
-              }, { passive: true });
-
-              track.addEventListener('touchend', function() {
-                if (!dragging) return;
-                dragging = false;
-                transitioning = true;
-                if (dragDelta < -50) {
-                  goTo(current + 1, true);
-                } else if (dragDelta > 50) {
-                  goTo(current - 1, true);
-                } else {
-                  goTo(current, true);
-                  transitioning = false;
-                }
-              });
-
-              dots.forEach(function(dot) {
-                dot.addEventListener('click', function() {
-                  var idx = parseInt(dot.getAttribute('data-dot'));
-                  transitioning = true;
-                  goTo(idx, true);
-                });
-              });
-
-              window.addEventListener('resize', function() {
-                setPos(current, false);
-              });
-            }
-
-            if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', initCarousel);
-            } else {
-              initCarousel();
-            }
-          })();
-        ` }} />
       </div>
 
       {/* Stat bar */}
@@ -428,7 +320,7 @@ export default async function HomePage() {
           { val: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', label: 'Total commissions tracked' },
           { val: stats.products > 0 ? `${stats.products}+` : 'New', label: 'Active products listed' },
           { val: stats.affiliates > 0 ? stats.affiliates.toLocaleString() : 'Growing', label: 'Registered affiliates' },
-          { val: '30 - 90', label: 'Day cookie window' },
+          { val: '30', label: 'Day cookie window' },
         ].map(s => (
           <div key={s.label} className="stat-cell">
             <div className="stat-val">{s.val}</div>
@@ -572,6 +464,91 @@ export default async function HomePage() {
         </div>
         <div className="footer-copy">© 2026 UGCAffiliates · HONNYDO LLC.</div>
       </footer>
+
+      {/* Carousel script — mobile only */}
+      <script dangerouslySetInnerHTML={{ __html: `
+        (function() {
+          function initMobileHero() {
+            var track = document.getElementById('mobile-hero-track');
+            if (!track) return;
+            var dots = document.querySelectorAll('.mobile-hero-dot');
+            var slideCount = 4;
+            var current = 0;
+            var startX = 0;
+            var dragging = false;
+            var dragDelta = 0;
+            var transitioning = false;
+
+            function getW() {
+              var s = track.querySelector('.mobile-hero-slide');
+              return s ? s.offsetWidth : window.innerWidth;
+            }
+
+            function setPos(idx, animate) {
+              track.style.transition = animate ? 'transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94)' : 'none';
+              track.style.transform = 'translateX(' + (-(idx + 1) * getW()) + 'px)';
+            }
+
+            function updateDots(idx) {
+              dots.forEach(function(d, i) {
+                d.classList.toggle('active', i === idx);
+              });
+            }
+
+            function goTo(idx, animate) {
+              current = idx;
+              setPos(idx, animate !== false);
+              updateDots(((idx % slideCount) + slideCount) % slideCount);
+            }
+
+            setPos(0, false);
+
+            track.addEventListener('transitionend', function() {
+              if (current === slideCount) { goTo(0, false); }
+              else if (current === -1) { goTo(slideCount - 1, false); }
+              transitioning = false;
+            });
+
+            track.addEventListener('touchstart', function(e) {
+              if (transitioning) return;
+              startX = e.touches[0].clientX;
+              dragging = true;
+              dragDelta = 0;
+              track.style.transition = 'none';
+            }, { passive: true });
+
+            track.addEventListener('touchmove', function(e) {
+              if (!dragging) return;
+              dragDelta = e.touches[0].clientX - startX;
+              track.style.transform = 'translateX(' + (-(current + 1) * getW() + dragDelta) + 'px)';
+            }, { passive: true });
+
+            track.addEventListener('touchend', function() {
+              if (!dragging) return;
+              dragging = false;
+              transitioning = true;
+              if (dragDelta < -50) { goTo(current + 1, true); }
+              else if (dragDelta > 50) { goTo(current - 1, true); }
+              else { goTo(current, true); transitioning = false; }
+            });
+
+            dots.forEach(function(dot) {
+              dot.addEventListener('click', function() {
+                transitioning = true;
+                goTo(parseInt(dot.getAttribute('data-dot')), true);
+              });
+            });
+
+            window.addEventListener('resize', function() { setPos(current, false); });
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initMobileHero);
+          } else {
+            initMobileHero();
+          }
+        })();
+      ` }} />
     </div>
   )
 }
