@@ -198,6 +198,7 @@ export default async function HomePage() {
           .ai-grid { grid-template-columns: 1fr; gap: 2rem; }
         }
         @media (max-width: 768px) {
+          .invite-banner { display: none; }
           .invite-banner { padding: 10px 1rem; }
           .invite-banner-text { font-size: 11px; }
           .invite-banner-link { font-size: 11px; white-space: nowrap; }
@@ -225,7 +226,7 @@ export default async function HomePage() {
 
       <Navbar />
 
-      {/* Invite banner */}
+      {/* Invite banner — hidden on mobile, visible on desktop */}
       <div className="invite-banner">
         <span className="invite-banner-text">Invite-only access — currently accepting applications from select vendors & creators</span>
         <Link href="/signup" className="invite-banner-link">Request your invite →</Link>
@@ -262,42 +263,11 @@ export default async function HomePage() {
           {/* Mobile full-width overlay hero */}
           <div className="hero-mobile-overlay">
             <div style={{ position: 'relative', overflow: 'hidden' }}>
-              <div id="mobile-hero-track" className="mobile-hero-track">
-                {/* Clone of last for infinite loop */}
-                <div className="mobile-hero-slide">
-                  <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
-                  <div className="mobile-hero-gradient" />
-                </div>
-                <div className="mobile-hero-slide">
-                  <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
-                  <div className="mobile-hero-gradient" />
-                </div>
-                <div className="mobile-hero-slide">
-                  <video autoPlay muted loop playsInline><source src="/hero2.mp4" type="video/mp4" /></video>
-                  <div className="mobile-hero-gradient" />
-                </div>
-                <div className="mobile-hero-slide">
-                  <video autoPlay muted loop playsInline><source src="/hero3.mp4" type="video/mp4" /></video>
-                  <div className="mobile-hero-gradient" />
-                </div>
-                <div className="mobile-hero-slide">
-                  <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
-                  <div className="mobile-hero-gradient" />
-                </div>
-                {/* Clone of first for infinite loop */}
-                <div className="mobile-hero-slide">
-                  <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
-                  <div className="mobile-hero-gradient" />
-                </div>
-              </div>
+              {/* Slides injected dynamically by script */}
+              <div id="mobile-hero-track" className="mobile-hero-track" />
 
-              {/* Vertical dot indicators */}
-              <div className="mobile-hero-dots">
-                <button className="mobile-hero-dot active" data-dot="0" />
-                <button className="mobile-hero-dot" data-dot="1" />
-                <button className="mobile-hero-dot" data-dot="2" />
-                <button className="mobile-hero-dot" data-dot="3" />
-              </div>
+              {/* Dots injected dynamically by script */}
+              <div id="mobile-hero-dots" className="mobile-hero-dots" />
 
               {/* Copy overlaid on video */}
               <div className="mobile-hero-content">
@@ -465,14 +435,45 @@ export default async function HomePage() {
         <div className="footer-copy">© 2026 UGCAffiliates · HONNYDO LLC.</div>
       </footer>
 
-      {/* Carousel script — mobile only */}
+      {/* Carousel script — mobile only, random start, dynamic slides */}
       <script dangerouslySetInnerHTML={{ __html: `
         (function() {
           function initMobileHero() {
             var track = document.getElementById('mobile-hero-track');
-            if (!track) return;
-            var dots = document.querySelectorAll('.mobile-hero-dot');
-            var slideCount = 4;
+            var dotsContainer = document.getElementById('mobile-hero-dots');
+            if (!track || !dotsContainer) return;
+
+            // ── Video list — add/remove filenames here freely ──
+            var videos = ['hero1.mp4', 'hero2.mp4', 'hero3.mp4', 'hero4.mp4'];
+
+            // Shuffle videos randomly on every page load
+            for (var i = videos.length - 1; i > 0; i--) {
+              var j = Math.floor(Math.random() * (i + 1));
+              var tmp = videos[i]; videos[i] = videos[j]; videos[j] = tmp;
+            }
+
+            var slideCount = videos.length;
+
+            // Build slides dynamically: clone-last + real slides + clone-first
+            var allSlides = [videos[slideCount - 1]].concat(videos).concat([videos[0]]);
+            track.innerHTML = '';
+            allSlides.forEach(function(src) {
+              var slide = document.createElement('div');
+              slide.className = 'mobile-hero-slide';
+              slide.innerHTML = '<video autoplay muted loop playsinline><source src="/' + src + '" type="video/mp4"></video><div class="mobile-hero-gradient"></div>';
+              track.appendChild(slide);
+            });
+
+            // Build dots dynamically
+            dotsContainer.innerHTML = '';
+            videos.forEach(function(_, i) {
+              var btn = document.createElement('button');
+              btn.className = 'mobile-hero-dot' + (i === 0 ? ' active' : '');
+              btn.setAttribute('data-dot', i);
+              dotsContainer.appendChild(btn);
+            });
+            var dots = dotsContainer.querySelectorAll('.mobile-hero-dot');
+
             var current = 0;
             var startX = 0;
             var dragging = false;
@@ -490,9 +491,7 @@ export default async function HomePage() {
             }
 
             function updateDots(idx) {
-              dots.forEach(function(d, i) {
-                d.classList.toggle('active', i === idx);
-              });
+              dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
             }
 
             function goTo(idx, animate) {
