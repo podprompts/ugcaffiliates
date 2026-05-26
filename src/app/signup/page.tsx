@@ -17,6 +17,15 @@ export default function SignupPage() {
   const [inviteError, setInviteError] = useState('')
   const [inviteLoading, setInviteLoading] = useState(false)
 
+  // Request access form
+  const [showRequestForm, setShowRequestForm] = useState(false)
+  const [requestEmail, setRequestEmail] = useState('')
+  const [requestFirst, setRequestFirst] = useState('')
+  const [requestLast, setRequestLast] = useState('')
+  const [requestLoading, setRequestLoading] = useState(false)
+  const [requestSent, setRequestSent] = useState(false)
+  const [requestError, setRequestError] = useState('')
+
   const [role, setRole] = useState<'affiliate' | 'vendor' | null>(null)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -29,6 +38,28 @@ export default function SignupPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  async function handleRequestAccess(e: React.FormEvent) {
+    e.preventDefault()
+    if (!requestEmail || !requestFirst || !requestLast) { setRequestError('All fields are required'); return }
+    setRequestLoading(true); setRequestError('')
+
+    const res = await fetch('/api/email/request-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: requestEmail, firstName: requestFirst, lastName: requestLast }),
+    })
+    const data = await res.json()
+
+    if (!data.ok) {
+      setRequestError(data.error ?? 'Something went wrong. Please try again.')
+      setRequestLoading(false)
+      return
+    }
+
+    setRequestSent(true)
+    setRequestLoading(false)
+  }
 
   async function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -180,10 +211,79 @@ export default function SignupPage() {
               </button>
             </form>
 
-            <p style={{ textAlign: 'center' as const, fontSize: '12px', color: '#888', marginTop: '2rem', lineHeight: 1.6 }}>
-              Don't have an invite code?{' '}
-              <a href="mailto:hello@ugcaffiliates.com" style={{ color: '#0d0d0d', fontWeight: 600 }}>Request access</a>
-            </p>
+            {/* Request access */}
+            {!showRequestForm ? (
+              <p style={{ textAlign: 'center' as const, fontSize: '12px', color: '#888', marginTop: '2rem', lineHeight: 1.6 }}>
+                Don't have an invite code?{' '}
+                <button onClick={() => setShowRequestForm(true)}
+                  style={{ color: '#0d0d0d', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px', padding: 0 }}>
+                  Request access
+                </button>
+              </p>
+            ) : requestSent ? (
+              <div style={{ marginTop: '2rem', textAlign: 'center' as const, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '1.25rem 1.5rem' }}>
+                <div style={{ fontSize: '18px', marginBottom: '0.4rem' }}>✓</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#16a34a', marginBottom: '0.25rem' }}>Request sent!</div>
+                <div style={{ fontSize: '12px', color: '#3a3a3a', lineHeight: 1.6 }}>We'll be in touch shortly with your invite code.</div>
+              </div>
+            ) : (
+              <div style={{ marginTop: '2rem', background: '#f9f8f6', border: '1px solid #e8e6e2', borderRadius: '6px', padding: '1.25rem 1.5rem' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#0d0d0d', marginBottom: '0.85rem' }}>Request access</div>
+                <form onSubmit={handleRequestAccess} style={{ display: 'flex', flexDirection: 'column' as const, gap: '0.6rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <div>
+                      <label style={{ display: 'block' as const, fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#888', marginBottom: '0.3rem' }}>First name</label>
+                      <input
+                        className="su-input"
+                        type="text"
+                        value={requestFirst}
+                        onChange={e => setRequestFirst(e.target.value)}
+                        placeholder="Jane"
+                        required
+                        style={{ fontSize: '13px', padding: '0.55rem 0.75rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block' as const, fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#888', marginBottom: '0.3rem' }}>Last name</label>
+                      <input
+                        className="su-input"
+                        type="text"
+                        value={requestLast}
+                        onChange={e => setRequestLast(e.target.value)}
+                        placeholder="Smith"
+                        required
+                        style={{ fontSize: '13px', padding: '0.55rem 0.75rem' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block' as const, fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#888', marginBottom: '0.3rem' }}>Email address</label>
+                    <input
+                      className="su-input"
+                      type="email"
+                      value={requestEmail}
+                      onChange={e => setRequestEmail(e.target.value)}
+                      placeholder="jane@example.com"
+                      required
+                      style={{ fontSize: '13px', padding: '0.55rem 0.75rem' }}
+                    />
+                  </div>
+                  {requestError && (
+                    <div style={{ fontSize: '12px', color: '#c0392b', padding: '0.5rem 0.75rem', background: '#fdf2f2', borderRadius: '3px', border: '1px solid #f5c6cb' }}>{requestError}</div>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                    <button type="submit" disabled={requestLoading}
+                      style={{ flex: 1, padding: '0.65rem', background: requestLoading ? '#888' : '#0d0d0d', color: '#ffffff', fontSize: '13px', fontWeight: 600, border: 'none', borderRadius: '3px', cursor: requestLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                      {requestLoading ? 'Sending...' : 'Send request'}
+                    </button>
+                    <button type="button" onClick={() => setShowRequestForm(false)}
+                      style={{ padding: '0.65rem 1rem', background: 'none', color: '#888', fontSize: '13px', border: '1px solid #e8e6e2', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </>
 
         ) : (
