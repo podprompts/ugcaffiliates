@@ -101,8 +101,8 @@ function ImageGallery({ images }: { images: string[] }) {
         .ig-slide { flex-shrink: 0; width: 100%; scroll-snap-align: start; aspect-ratio: 4/3; position: relative; overflow: hidden; }
         .ig-slide img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; transition: transform 0.4s ease; display: block; }
         .ig-slide img:hover { transform: scale(1.02); }
-        .ig-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.92); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; box-shadow: 0 2px 12px rgba(0,0,0,0.12); transition: background 0.15s, transform 0.15s; backdrop-filter: blur(4px); }
-        .ig-btn:hover { background: #ffffff; transform: translateY(-50%) scale(1.08); }
+        .ig-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; transition: background 0.15s, transform 0.15s; backdrop-filter: blur(6px); }
+.ig-btn:hover { background: rgba(255,255,255,0.38); transform: translateY(-50%) scale(1.05); }
         .ig-btn-left { left: 12px; }
         .ig-btn-right { right: 12px; }
         .ig-dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 2; }
@@ -133,10 +133,10 @@ function ImageGallery({ images }: { images: string[] }) {
         {n > 1 && (
           <>
             <button className="ig-btn ig-btn-left" onClick={() => scrollTo(-1)} aria-label="Previous">
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#0d0d0d" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.9)" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
             </button>
             <button className="ig-btn ig-btn-right" onClick={() => scrollTo(1)} aria-label="Next">
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#0d0d0d" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.9)" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
             </button>
             <div className="ig-dots">
               {images.map((_, i) => (

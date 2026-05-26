@@ -53,7 +53,7 @@ export default function PricingPage() {
               'Real-time conversions dashboard',
               'AI-generated affiliate content',
               'Server-side conversion tracking',
-              '30-day cookie window',
+              '30 day cookie window',
               'Shopify & WooCommerce integration',
               'Automatic Stripe payouts to affiliates',
               'Brand guidelines & prohibited terms',

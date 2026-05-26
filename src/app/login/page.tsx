@@ -19,6 +19,7 @@ function LoginForm() {
 
   const confirmed = searchParams.get('confirmed') === 'true'
   const authError = searchParams.get('error')
+  const passwordReset = searchParams.get('reset') === 'true'
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -102,7 +103,17 @@ function LoginForm() {
             <Link href="/signup" style={{ color: '#dc2626', fontWeight: 600 }}>create a new account</Link>.
           </div>
         )}
-
+{passwordReset && (
+  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5} style={{ flexShrink: 0, marginTop: '1px' }}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+    <div>
+      <div style={{ fontSize: '13px', fontWeight: 600, color: '#16a34a', marginBottom: '0.2rem' }}>Password updated!</div>
+      <div style={{ fontSize: '13px', color: '#166534' }}>Your password has been changed. Sign in below with your new password.</div>
+    </div>
+  </div>
+)}
         <div style={{ textAlign: 'center' as const, marginBottom: '2rem' }}>
           <h1 style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '2.25rem', fontWeight: 500, marginBottom: '0.4rem' }}>Sign in</h1>
           <p style={{ fontSize: '13.5px', color: '#888' }}>Welcome back.</p>

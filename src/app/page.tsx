@@ -96,9 +96,9 @@ export default async function HomePage() {
     <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', background: '#faf9f7', color: '#1a1a1a', overflowX: 'hidden' }}>
       <style>{`
         /* ── Invite banner ── */
-        .invite-banner { background: #f0ece5; border-bottom: 1px solid #e8e4de; padding: 10px 2.5rem; display: flex; align-items: center; justify-content: space-between; }
-        .invite-banner-text { font-size: 12px; color: #888; letter-spacing: 0.03em; }
-        .invite-banner-link { font-size: 12px; color: #1a1a1a; font-weight: 600; letter-spacing: 0.06em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+        .invite-banner { background: #f0ece5; border-bottom: 1px solid #e8e4de; padding: 10px 2.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.invite-banner-text { font-size: 12px; color: #888; letter-spacing: 0.03em; flex: 1; }
+.invite-banner-link { font-size: 12px; color: #1a1a1a; font-weight: 600; letter-spacing: 0.06em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 
         /* ── Hero ── */
         .hero { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #e8e4de; align-items: stretch; }
@@ -219,7 +219,9 @@ export default async function HomePage() {
           .hero-carousel-dot.active { background: #1a1a1a; width: 16px; border-radius: 3px; }
           .hero-h1 { font-size: 2.5rem !important; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
-          .pill-row { padding: 16px 1rem; }
+          .invite-banner { padding: 10px 1rem; }
+          .invite-banner-text { font-size: 11px; }
+          .invite-banner-link { font-size: 11px; white-space: nowrap; }
           .section { padding: 36px 1.5rem; }
           .product-grid { grid-template-columns: repeat(2, 1fr); }
           .cat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -249,7 +251,7 @@ export default async function HomePage() {
       <div className="hero">
         <div className="hero-left">
           <div className="hero-eyebrow">Affiliate platform · Est. 2026</div>
-          <h1 className="hero-h1">Promote products.<br />Earn what you're<br />worth.</h1>
+          <h1 className="hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
           <p className="hero-sub">A curated marketplace connecting vetted vendors with motivated creators. Apply to promote, share your link, collect commissions directly.</p>
           <div className="hero-btns">
             <Link href="/signup" className="btn-primary">Request access</Link>
@@ -426,7 +428,7 @@ export default async function HomePage() {
           { val: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', label: 'Total commissions tracked' },
           { val: stats.products > 0 ? `${stats.products}+` : 'New', label: 'Active products listed' },
           { val: stats.affiliates > 0 ? stats.affiliates.toLocaleString() : 'Growing', label: 'Registered affiliates' },
-          { val: '30', label: 'Day cookie window' },
+          { val: '30 - 90', label: 'Day cookie window' },
         ].map(s => (
           <div key={s.label} className="stat-cell">
             <div className="stat-val">{s.val}</div>
@@ -499,7 +501,7 @@ export default async function HomePage() {
           <h2 className="edit-h2">Your content.<br />Real income.</h2>
           <p className="edit-body">Browse curated products that match your niche. Apply to promote, get your unique link, and start earning commissions on every confirmed sale — paid directly.</p>
           <div className="edit-features">
-            {['AI-generated hooks, captions & scripts per product', 'Unique tracked link for every product', 'Live commission & click dashboard', '30-day cookie tracking window', 'Free to join — no monthly fees'].map(f => (
+            {['AI-generated hooks, captions & scripts per product', 'Unique tracked link for every product', 'Live commission & click dashboard', '30 day cookie tracking window', 'Free to join — no monthly fees'].map(f => (
               <div key={f} className="edit-feature"><div className="edit-dot" />{f}</div>
             ))}
           </div>
