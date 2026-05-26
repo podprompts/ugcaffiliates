@@ -110,6 +110,7 @@ export default async function HomePage() {
         .hero-video-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
         .hero-desktop-cell { display: block; }
         .hero-mobile-overlay { display: none; }
+        .hero-mobile-overlay-inner { position: relative; overflow: hidden; min-height: 200px; background: #1a1a1a; }
 
         .btn-primary { background: #1a1a1a; color: #faf9f7; font-size: 11px; font-weight: 600; padding: 10px 24px; border: 1px solid #1a1a1a; cursor: pointer; letter-spacing: 0.08em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
         .btn-ghost { background: none; color: #888; font-size: 11px; font-weight: 500; padding: 10px 24px; border: 1px solid #e0dbd4; cursor: pointer; letter-spacing: 0.06em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
@@ -206,7 +207,7 @@ export default async function HomePage() {
           .hero-left { display: none; }
           .hero-right { display: block !important; background: none; border-bottom: 1px solid #e8e4de; }
           .hero-desktop-cell { display: none !important; }
-          .hero-mobile-overlay { display: block; }
+          .hero-mobile-overlay { display: block !important; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
           .pill-row { padding: 16px 1rem; }
           .section { padding: 36px 1.5rem; }
@@ -262,7 +263,7 @@ export default async function HomePage() {
 
           {/* Mobile full-width overlay hero */}
           <div className="hero-mobile-overlay">
-            <div style={{ position: 'relative', overflow: 'hidden' }}>
+            <div className="hero-mobile-overlay-inner">
               {/* Slides injected dynamically by script */}
               <div id="mobile-hero-track" className="mobile-hero-track" />
 
@@ -542,10 +543,12 @@ export default async function HomePage() {
           }
 
           if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initMobileHero);
-          } else {
-            initMobileHero();
-          }
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initMobileHero, 50);
+  });
+} else {
+  setTimeout(initMobileHero, 50);
+}
         })();
       ` }} />
     </div>
