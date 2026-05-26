@@ -171,7 +171,7 @@ export default function VendorSignupPage() {
               'Unlimited product listings',
               'Unlimited affiliates',
               'Real-time sales dashboard',
-              'AI affiliate asset generation',
+              'AI affiliate asset generation (Video & Images)',
               'Server-side conversion tracking',
               '30-day cookie window',
             ].map(f => (

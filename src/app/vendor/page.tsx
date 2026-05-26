@@ -1,14 +1,78 @@
 // src/app/vendor/page.tsx
 'use client'
 
-import { Suspense } from 'react'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 import VendorNav from '@/components/VendorNav'
 
 export const dynamic = 'force-dynamic'
+
+function InviteCodes({ userId }: { userId: string }) {
+  const [codes, setCodes] = useState<any[]>([])
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  useEffect(() => {
+    if (!userId) return
+    supabase
+      .from('invite_codes')
+      .select('id, code, used, used_at, profiles!used_by(full_name)')
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setCodes(data ?? []))
+  }, [userId])
+
+  if (codes.length === 0) return null
+
+  const available = codes.filter(c => !c.used)
+
+  function copyCode(code: string) {
+    navigator.clipboard.writeText(code)
+    setCopied(code)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  return (
+    <div style={{ background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 600 }}>Your invite codes</div>
+          <div style={{ fontSize: '12px', color: '#888', marginTop: '0.15rem' }}>{available.length} of {codes.length} remaining</div>
+        </div>
+        <div style={{ fontSize: '11px', color: '#888', background: '#f9f8f6', border: '1px solid #e8e6e2', padding: '0.3rem 0.75rem', borderRadius: '100px' }}>
+          {available.length} left
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {codes.map(c => {
+          const usedBy = (c.profiles as any)?.full_name
+          return (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0.85rem', background: c.used ? '#f9f8f6' : '#ffffff', border: '1px solid #e8e6e2', borderRadius: '3px' }}>
+              <code style={{ flex: 1, fontSize: '14px', fontWeight: 600, letterSpacing: '0.15em', color: c.used ? '#aaa' : '#0d0d0d', textDecoration: c.used ? 'line-through' : 'none' }}>{c.code}</code>
+              {c.used ? (
+                <span style={{ fontSize: '11px', color: '#888' }}>Used{usedBy ? ` by ${usedBy}` : ''}</span>
+              ) : (
+                <button onClick={() => copyCode(c.code)}
+                  style={{ fontSize: '11.5px', fontWeight: 600, color: copied === c.code ? '#16a34a' : '#0d0d0d', background: '#f2f0ec', border: 'none', padding: '0.3rem 0.65rem', borderRadius: '3px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  {copied === c.code ? '✓ Copied' : 'Copy'}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <p style={{ fontSize: '12px', color: '#888', marginTop: '1rem', lineHeight: 1.6 }}>
+        Share these codes with creators or brands you want to invite to UGCA. Each code can only be used once.
+      </p>
+    </div>
+  )
+}
 
 function VendorDashboard() {
   const router = useRouter()
@@ -47,7 +111,6 @@ function VendorDashboard() {
       }
       setProfile(prof)
 
-      // Fetch additional profile fields including vendor_status
       const { data: fullProfile } = await supabase
         .from('profiles')
         .select('vendor_status, rejection_note, reapply_count, business_name, full_name')
@@ -58,7 +121,6 @@ function VendorDashboard() {
         setProfile((prev: any) => ({ ...prev, ...fullProfile }))
       }
 
-      // Only load products/apps if approved
       if (fullProfile?.vendor_status !== 'approved') {
         setLoading(false)
         return
@@ -192,6 +254,9 @@ function VendorDashboard() {
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', fontSize: '13px', color: '#16a34a' }}>
           ✓ Free to list · 10% platform fee on confirmed affiliate sales only
         </div>
+
+        {/* Invite codes — show right after the free listing notice */}
+        <InviteCodes userId={profile?.id} />
 
         {/* Pending approval banner */}
         {isPending && (

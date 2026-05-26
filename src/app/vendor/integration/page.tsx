@@ -415,7 +415,7 @@ function ugca_save_ref_to_order($order, $data) {
               ['1', 'Affiliate clicks their link', 'The affiliate shares their unique link (ugcaffiliates.com/go/XXXX). When clicked, the visitor is redirected to your product page with ?ugca_ref=XXXX appended to the URL.'],
               ['2', 'Visitor shops and buys', 'The ref is stored in a cookie (30-day window) and/or passed through checkout. When the order confirms, the pixel or postback fires with the ref code.'],
               ['3', 'Commission is recorded', 'UGCA records the conversion, calculates the commission, and marks it pending. You see it in your Conversions dashboard within seconds.'],
-              ['4', 'You approve and pay', 'After reviewing, approve the conversion and pay the affiliate directly. UGCA invoices you the 10% platform fee separately.'],
+              ['4', 'You approve and pay', 'After reviewing, click "Approve & Pay" in your Conversions dashboard. UGCA automatically charges your saved card the affiliate commission plus the 10% platform fee, and transfers the commission directly to the affiliate\'s bank account via Stripe.'],
             ].map(([num, title, desc]) => (
               <div key={num} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
                 <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#0d0d0d', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '1px' }}>{num}</div>

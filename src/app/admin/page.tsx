@@ -18,6 +18,10 @@ export default function AdminPage() {
   const [platformRules, setPlatformRules] = useState<any[]>([])
   const [editingRule, setEditingRule] = useState<string | null>(null)
   const [ruleValues, setRuleValues] = useState<Record<string, string>>({})
+  const [inviteCodes, setInviteCodes] = useState<any[]>([])
+  const [generatingCodes, setGeneratingCodes] = useState(false)
+  const [generateCount, setGenerateCount] = useState(10)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,6 +31,30 @@ export default function AdminPage() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/'
+  }
+
+  async function loadInviteCodes(token: string) {
+    const res = await fetch('/api/admin/invite-codes', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    setInviteCodes(data.codes ?? [])
+  }
+
+  async function generateInviteCodes() {
+    setGeneratingCodes(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const res = await fetch('/api/admin/invite-codes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ count: generateCount }),
+    })
+    const data = await res.json()
+    if (data.ok) {
+      setInviteCodes(prev => [...data.codes.map((code: string) => ({ code, used: false })), ...prev])
+    }
+    setGeneratingCodes(false)
   }
 
   useEffect(() => {
@@ -78,6 +106,8 @@ export default function AdminPage() {
       rules?.forEach(r => { vals[r.rule_key] = r.value })
       setRuleValues(vals)
 
+      await loadInviteCodes(session.access_token)
+
       setLoading(false)
     }
     load()
@@ -110,21 +140,23 @@ export default function AdminPage() {
     <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e8e6e2' }}>{title}</div>
   )
 
+  const availableCodes = inviteCodes.filter(c => !c.used)
+  const usedCodes = inviteCodes.filter(c => c.used)
+
   return (
     <div style={{ minHeight: '100vh', background: '#f9f8f6', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
       <style>{`
         .admin-content { max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem; }
         .admin-stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: #e8e6e2; margin-bottom: 2rem; }
         .admin-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
-        /* Products mini-table: Product | Vendor | Commission | Sales | Status */
         .admin-prod-table { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr; }
         .admin-prod-row   { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr; padding: 0.75rem 0; border-top: 1px solid #f2f0ec; align-items: center; }
         .admin-rule-row { padding: 0.85rem 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .invite-code-row { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0.85rem; border: 1px solid #e8e6e2; border-radius: 3px; }
         @media (max-width: 768px) {
           .admin-content { padding: 1.25rem 1rem; }
           .admin-stat-grid { grid-template-columns: repeat(3, 1fr); }
           .admin-two-col { grid-template-columns: 1fr; }
-          /* Products: show only title + status on mobile */
           .admin-prod-table { grid-template-columns: 1fr auto; }
           .admin-prod-table > div:nth-child(2),
           .admin-prod-table > div:nth-child(3),
@@ -244,7 +276,7 @@ export default function AdminPage() {
         </div>
 
         {/* Platform rules */}
-        <div style={{ background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.75rem' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.75rem', marginBottom: '1.5rem' }}>
           {sectionHead('Platform rules')}
           <p style={{ fontSize: '13px', color: '#888', marginBottom: '1.25rem' }}>Edit these values to change platform behavior instantly — no code deploy needed.</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: '#e8e6e2' }}>
@@ -273,6 +305,65 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Invite codes */}
+        <div style={{ background: '#ffffff', border: '1px solid #e8e6e2', borderRadius: '4px', padding: '1.75rem' }}>
+          {sectionHead('Invite codes')}
+          <p style={{ fontSize: '13px', color: '#888', marginBottom: '1.25rem' }}>Generate codes to distribute. Each code can be used once. New members automatically receive 5 codes of their own to share.</p>
+
+          {/* Generate controls */}
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+            <input
+              type="number" min={1} max={50} value={generateCount}
+              onChange={e => setGenerateCount(Number(e.target.value))}
+              style={{ width: '72px', padding: '0.4rem 0.6rem', border: '1px solid #e8e6e2', borderRadius: '3px', fontSize: '13px', fontFamily: 'monospace' }}
+            />
+            <button onClick={generateInviteCodes} disabled={generatingCodes}
+              style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', background: generatingCodes ? '#888' : '#0d0d0d', border: 'none', padding: '0.5rem 1.25rem', borderRadius: '3px', cursor: generatingCodes ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+              {generatingCodes ? 'Generating...' : 'Generate codes'}
+            </button>
+            <span style={{ fontSize: '12px', color: '#888' }}>
+              <span style={{ color: '#16a34a', fontWeight: 600 }}>{availableCodes.length} unused</span>
+              {' · '}
+              {usedCodes.length} used
+              {' · '}
+              {inviteCodes.length} total
+            </span>
+          </div>
+
+          {/* Code list */}
+          {inviteCodes.length === 0 ? (
+            <div style={{ fontSize: '13px', color: '#888', textAlign: 'center', padding: '2rem 0', background: '#f9f8f6', borderRadius: '4px', border: '1px solid #e8e6e2' }}>
+              No codes generated yet. Use the controls above to create your first batch.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '480px', overflowY: 'auto' }}>
+              {inviteCodes.map((c, i) => (
+                <div key={i} className="invite-code-row" style={{ background: c.used ? '#f9f8f6' : '#ffffff' }}>
+                  <code style={{ flex: 1, fontSize: '13px', fontWeight: 600, letterSpacing: '0.12em', color: c.used ? '#aaa' : '#0d0d0d', textDecoration: c.used ? 'line-through' : 'none' }}>
+                    {c.code}
+                  </code>
+                  <span style={{ fontSize: '11px', color: c.used ? '#888' : '#16a34a', fontWeight: 500, flexShrink: 0 }}>
+                    {c.used
+                      ? `Used${c.profiles?.full_name ? ` · ${c.profiles.full_name}` : c.used_at ? ` · ${new Date(c.used_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}`
+                      : 'Available'}
+                  </span>
+                  {!c.used && (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(c.code)
+                        setCopiedCode(c.code)
+                        setTimeout(() => setCopiedCode(null), 2000)
+                      }}
+                      style={{ fontSize: '11px', fontWeight: 600, color: copiedCode === c.code ? '#16a34a' : '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit', flexShrink: 0 }}>
+                      {copiedCode === c.code ? '✓ Copied' : 'Copy'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

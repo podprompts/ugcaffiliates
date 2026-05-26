@@ -209,7 +209,7 @@ export default async function HomePage() {
           {[
             { num: '01', title: 'Vendors list their product', body: 'Submit your product, set your commission rate, and define your brand rules. AI generates affiliate-ready assets — hooks, captions, scripts — automatically.', tag: 'For vendors' },
             { num: '02', title: 'Affiliates apply and promote', body: 'Browse the marketplace, apply to promote any product, and grab your unique tracked link. Post on TikTok, Instagram, YouTube, or your own site.', tag: 'For affiliates' },
-            { num: '03', title: 'Sales tracked automatically', body: 'Every confirmed purchase fires a server-side postback. Commissions calculate in real time. Vendors pay affiliates directly — no middleman.', tag: 'Automatic' },
+            { num: '03', title: 'Every confirmed purchase fires a server-side postback. Commissions calculate in real time. When vendors approve a sale, UGCA automatically pays the affiliate via Stripe — no manual transfers.', tag: 'Automatic' },
           ].map(s => (
             <div key={s.num}>
               <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '3rem', fontWeight: 400, color: '#e8e6e2', lineHeight: 1, marginBottom: '0.75rem' }}>{s.num}</div>
@@ -224,7 +224,7 @@ export default async function HomePage() {
       {/* ROLE SPLIT */}
       <div className="role-split">
         {[
-          { eyebrow: 'For vendors', headline: 'Your product.\nTheir audience.', body: 'List once, reach thousands of motivated creators who are genuinely incentivized to sell. You control every term.', features: ['Set commissions from 5% to 70%', 'Auto-approve or manually review affiliates', 'Real-time sales and earnings dashboard', 'Enforce brand guidelines and prohibited terms', 'AI UGC video generation (Pro)'], cta: 'Sign up to sell', href: '/vendor-signup', borderRight: true },
+          { eyebrow: 'For vendors', headline: 'Your product.\nTheir audience.', body: 'List once, reach thousands of motivated creators who are genuinely incentivized to sell. You control every term.', features: ['Set commissions from 5% to 70%', 'Auto-approve or manually review affiliates', 'Real-time sales and earnings dashboard', 'Enforce brand guidelines and prohibited terms', 'AI UGC video generation'], cta: 'Sign up to sell', href: '/vendor-signup', borderRight: true },
           { eyebrow: 'For affiliates', headline: 'Your content.\nReal income.', body: 'Browse products that match your niche. Get your link. Post your content. Commissions paid directly — no minimums.', features: ['AI-generated hooks and captions per product', 'Unique tracked link for every product', 'Live commission and click dashboard', '30-day cookie tracking window', 'Free to join — no monthly fees'], cta: 'Sign up to promote', href: '/signup', borderRight: false },
         ].map(pane => (
           <div key={pane.eyebrow} className="role-pane" style={{ borderRight: pane.borderRight ? '1px solid #e8e6e2' : 'none' }}>
@@ -294,7 +294,7 @@ export default async function HomePage() {
           <Link href="/marketplace"   style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>Marketplace</Link>
           <Link href="/vendor-signup" style={{ fontSize: '12px', color: '#888', textDecoration: 'none' }}>Vendors</Link>
         </div>
-        <div style={{ fontSize: '12px', color: '#888' }}>2026 UGCAffiliates, Inc.</div>
+        <div style={{ fontSize: '12px', color: '#888' }}>© 2026 UGCAffiliates · HONNYDO LLC.</div>
       </footer>
     </div>
   )
