@@ -101,18 +101,15 @@ export default async function HomePage() {
         .invite-banner-link { font-size: 12px; color: #1a1a1a; font-weight: 600; letter-spacing: 0.06em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
         /* ── Hero ── */
-        .hero { display: grid; grid-template-columns: 1fr 1fr; min-height: 400px; border-bottom: 1px solid #e8e4de; }
+        .hero { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #e8e4de; align-items: stretch; }
         .hero-left { padding: 72px 48px 72px 2.5rem; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid #e8e4de; }
         .hero-eyebrow { font-size: 10px; letter-spacing: 0.22em; color: #b5a99a; text-transform: uppercase; margin-bottom: 20px; }
         .hero-h1 { font-family: var(--font-cormorant), serif; font-size: 3.5rem; font-weight: 400; line-height: 1.08; color: #1a1a1a; margin-bottom: 20px; letter-spacing: -0.01em; }
         .hero-sub { font-size: 13.5px; color: #888; line-height: 1.75; margin-bottom: 32px; max-width: 38ch; }
         .hero-btns { display: flex; gap: 10px; flex-wrap: wrap; }
-        .hero-right { background: #f0ece5; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background-color: #e8e4de; }
-        .hero-img-cell { display: flex; align-items: center; justify-content: center; background: #f5f2ed; }
-        .hero-img-cell:nth-child(2) { background: #ede9e2; }
-        .hero-img-cell:nth-child(3) { background: #e8e4dc; }
-        .hero-img-cell:nth-child(4) { background: #f0ece5; }
-        .hero-img-placeholder { width: 50%; height: 50%; background: #ddd8cf; }
+        .hero-right { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background-color: #e8e4de; }
+        .hero-video-cell { overflow: hidden; background: #1a1a1a; aspect-ratio: 3/4; }
+        .hero-video-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
 
         /* ── Buttons ── */
         .btn-primary { background: #1a1a1a; color: #faf9f7; font-size: 11px; font-weight: 600; padding: 10px 24px; border: 1px solid #1a1a1a; cursor: pointer; letter-spacing: 0.08em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
@@ -212,8 +209,14 @@ export default async function HomePage() {
         @media (max-width: 768px) {
           .invite-banner { padding: 10px 1rem; }
           .hero { grid-template-columns: 1fr; }
-          .hero-left { padding: 48px 1.5rem; }
-          .hero-right { display: none; }
+          .hero-left { padding: 48px 1.5rem; border-right: none; border-bottom: 1px solid #e8e4de; }
+          .hero-right { display: block; position: relative; overflow: hidden; }
+          .hero-carousel { display: flex; transition: transform 0.38s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
+          .hero-carousel-slide { flex-shrink: 0; width: 75vw; aspect-ratio: 3/4; overflow: hidden; background: #1a1a1a; margin-right: 1px; }
+          .hero-carousel-slide video { width: 100%; height: 100%; object-fit: cover; display: block; }
+          .hero-carousel-dots { display: flex; justify-content: center; gap: 6px; padding: 12px 0; background: #faf9f7; }
+          .hero-carousel-dot { width: 5px; height: 5px; border-radius: 50%; background: #d0cbc2; border: none; padding: 0; cursor: pointer; transition: background 0.2s, width 0.2s; }
+          .hero-carousel-dot.active { background: #1a1a1a; width: 16px; border-radius: 3px; }
           .hero-h1 { font-size: 2.5rem !important; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
           .pill-row { padding: 16px 1rem; }
@@ -254,11 +257,167 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="hero-right">
-          <div className="hero-img-cell" style={{ aspectRatio: '1' }}><div className="hero-img-placeholder" /></div>
-          <div className="hero-img-cell" style={{ aspectRatio: '1' }}><div className="hero-img-placeholder" /></div>
-          <div className="hero-img-cell" style={{ aspectRatio: '1' }}><div className="hero-img-placeholder" /></div>
-          <div className="hero-img-cell" style={{ aspectRatio: '1' }}><div className="hero-img-placeholder" /></div>
+          {/* Desktop: 2x2 grid */}
+          <div className="hero-video-cell" style={{ display: 'contents' } as any}>
+            <style>{`
+              @media (min-width: 769px) {
+                .hero-right { display: grid !important; grid-template-columns: 1fr 1fr; gap: 1px; background-color: #e8e4de; overflow: visible !important; }
+                .hero-desktop-cell { display: block !important; }
+                .hero-mobile-carousel { display: none !important; }
+              }
+              @media (max-width: 768px) {
+                .hero-desktop-cell { display: none !important; }
+                .hero-mobile-carousel { display: block !important; }
+              }
+            `}</style>
+          </div>
+
+          {/* Desktop cells */}
+          <div className="hero-desktop-cell hero-video-cell">
+            <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
+          </div>
+          <div className="hero-desktop-cell hero-video-cell">
+            <video autoPlay muted loop playsInline><source src="/hero2.mp4" type="video/mp4" /></video>
+          </div>
+          <div className="hero-desktop-cell hero-video-cell">
+            <video autoPlay muted loop playsInline><source src="/hero3.mp4" type="video/mp4" /></video>
+          </div>
+          <div className="hero-desktop-cell hero-video-cell">
+            <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
+          </div>
+
+          {/* Mobile infinite swipe carousel */}
+          <div className="hero-mobile-carousel">
+            <div style={{ overflow: 'hidden', position: 'relative' }}>
+              <div id="ugca-carousel" className="hero-carousel">
+                {/* Cloned last slide at front for infinite feel */}
+                <div className="hero-carousel-slide">
+                  <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
+                </div>
+                <div className="hero-carousel-slide">
+                  <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
+                </div>
+                <div className="hero-carousel-slide">
+                  <video autoPlay muted loop playsInline><source src="/hero2.mp4" type="video/mp4" /></video>
+                </div>
+                <div className="hero-carousel-slide">
+                  <video autoPlay muted loop playsInline><source src="/hero3.mp4" type="video/mp4" /></video>
+                </div>
+                <div className="hero-carousel-slide">
+                  <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
+                </div>
+                {/* Cloned first slide at end for infinite feel */}
+                <div className="hero-carousel-slide">
+                  <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
+                </div>
+              </div>
+            </div>
+            <div className="hero-carousel-dots">
+              <button className="hero-carousel-dot active" data-dot="0" />
+              <button className="hero-carousel-dot" data-dot="1" />
+              <button className="hero-carousel-dot" data-dot="2" />
+              <button className="hero-carousel-dot" data-dot="3" />
+            </div>
+          </div>
         </div>
+
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            function initCarousel() {
+              var track = document.getElementById('ugca-carousel');
+              if (!track) return;
+              var dots = document.querySelectorAll('.hero-carousel-dot');
+              var slideCount = 4;
+              var current = 0;
+              var slideW = 0;
+              var startX = 0;
+              var dragging = false;
+              var dragDelta = 0;
+              var transitioning = false;
+
+              function getSlideW() {
+                var s = track.querySelector('.hero-carousel-slide');
+                return s ? s.offsetWidth + 1 : window.innerWidth * 0.75;
+              }
+
+              function setPos(idx, animate) {
+                slideW = getSlideW();
+                track.style.transition = animate ? 'transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94)' : 'none';
+                track.style.transform = 'translateX(' + (-(idx + 1) * slideW) + 'px)';
+              }
+
+              function updateDots(idx) {
+                dots.forEach(function(d, i) {
+                  d.classList.toggle('active', i === idx);
+                });
+              }
+
+              function goTo(idx, animate) {
+                current = idx;
+                setPos(idx, animate !== false);
+                updateDots(((idx % slideCount) + slideCount) % slideCount);
+              }
+
+              setPos(0, false);
+
+              track.addEventListener('transitionend', function() {
+                if (current === slideCount) {
+                  goTo(0, false);
+                } else if (current === -1) {
+                  goTo(slideCount - 1, false);
+                }
+                transitioning = false;
+              });
+
+              track.addEventListener('touchstart', function(e) {
+                if (transitioning) return;
+                startX = e.touches[0].clientX;
+                dragging = true;
+                dragDelta = 0;
+                track.style.transition = 'none';
+              }, { passive: true });
+
+              track.addEventListener('touchmove', function(e) {
+                if (!dragging) return;
+                dragDelta = e.touches[0].clientX - startX;
+                slideW = getSlideW();
+                track.style.transform = 'translateX(' + (-(current + 1) * slideW + dragDelta) + 'px)';
+              }, { passive: true });
+
+              track.addEventListener('touchend', function() {
+                if (!dragging) return;
+                dragging = false;
+                transitioning = true;
+                if (dragDelta < -50) {
+                  goTo(current + 1, true);
+                } else if (dragDelta > 50) {
+                  goTo(current - 1, true);
+                } else {
+                  goTo(current, true);
+                  transitioning = false;
+                }
+              });
+
+              dots.forEach(function(dot) {
+                dot.addEventListener('click', function() {
+                  var idx = parseInt(dot.getAttribute('data-dot'));
+                  transitioning = true;
+                  goTo(idx, true);
+                });
+              });
+
+              window.addEventListener('resize', function() {
+                setPos(current, false);
+              });
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', initCarousel);
+            } else {
+              initCarousel();
+            }
+          })();
+        ` }} />
       </div>
 
       {/* Stat bar */}
