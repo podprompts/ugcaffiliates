@@ -416,8 +416,31 @@ export default async function HomePage() {
             allSlides.forEach(function(src) {
               var slide = document.createElement('div');
               slide.className = 'mobile-hero-slide';
-              slide.innerHTML = '<video autoplay muted loop playsinline><source src="/' + src + '" type="video/mp4"></video><div class="mobile-hero-gradient"></div>';
+              var video = document.createElement('video');
+              video.autoplay = true;
+              video.muted = true;
+              video.loop = true;
+              video.playsInline = true;
+              video.setAttribute('playsinline', '');
+              video.setAttribute('muted', '');
+              var source = document.createElement('source');
+              source.src = '/' + src;
+              source.type = 'video/mp4';
+              video.appendChild(source);
+              var gradient = document.createElement('div');
+              gradient.className = 'mobile-hero-gradient';
+              slide.appendChild(video);
+              slide.appendChild(gradient);
               track.appendChild(slide);
+              video.load();
+              var playPromise = video.play();
+              if (playPromise !== undefined) {
+                playPromise.catch(function() {
+                  // Autoplay blocked — video stays muted and will play on next interaction
+                  video.muted = true;
+                  video.play();
+                });
+              }
             });
 
             dotsContainer.innerHTML = '';
