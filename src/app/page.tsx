@@ -214,7 +214,7 @@ export default async function HomePage() {
         <div className="hero-left">
           <div className="hero-eyebrow">Affiliate platform · Invite Only</div>
           <h1 className="hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
-          <p className="hero-sub">A curated marketplace connecting vetted vendors with motivated creators. Apply to promote, share your link, collect commissions directly.</p>
+          <p className="hero-sub">A curated marketplace connecting vetted vendors with motivated affiliates. Apply to promote, share your link, and collect commissions directly via Stripe.</p>
           <div className="hero-btns">
             <Link href="/signup" className="btn-primary">Request access</Link>
             <Link href="/marketplace" className="btn-ghost">Browse products</Link>
@@ -242,7 +242,7 @@ export default async function HomePage() {
               <div className="mobile-hero-content">
                 <div className="mobile-hero-eyebrow">Affiliate platform · Invite only</div>
                 <h1 className="mobile-hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
-                <p className="mobile-hero-sub">A curated marketplace connecting vetted vendors with motivated creators.</p>
+                <p className="mobile-hero-sub">A curated marketplace connecting vetted vendors with motivated affiliates.</p>
                 <div className="mobile-hero-btns">
                   <Link href="/signup" className="mobile-btn-primary">Request access</Link>
                   <Link href="/marketplace" className="mobile-btn-ghost">Browse products</Link>
@@ -437,6 +437,7 @@ export default async function HomePage() {
             var dragDelta = 0;
             var transitioning = false;
             var lockAxis = null;
+            var transitionTimer = null;
 
             function getW() {
               var s = track.querySelector('.mobile-hero-slide');
@@ -454,24 +455,38 @@ export default async function HomePage() {
               dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
             }
 
+            function unlock() {
+              transitioning = false;
+              if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null; }
+            }
+
             function goTo(idx, animate) {
               current = idx;
               setPos(idx, animate !== false);
               updateDots(((idx % slideCount) + slideCount) % slideCount);
+              if (animate) {
+                if (transitionTimer) clearTimeout(transitionTimer);
+                transitionTimer = setTimeout(function() {
+                  if (current === slideCount) { current = 0; setPos(0, false); updateDots(0); }
+                  else if (current === -1) { current = slideCount - 1; setPos(slideCount - 1, false); updateDots(slideCount - 1); }
+                  unlock();
+                }, 500);
+              }
             }
 
             setPos(0, false);
 
             track.addEventListener('transitionend', function() {
-              if (current === slideCount) goTo(0, false);
-              else if (current === -1) goTo(slideCount - 1, false);
-              transitioning = false;
+              if (current === slideCount) { current = 0; setPos(0, false); updateDots(0); }
+              else if (current === -1) { current = slideCount - 1; setPos(slideCount - 1, false); updateDots(slideCount - 1); }
+              unlock();
             });
 
             var wrapper = track.parentElement;
 
             wrapper.addEventListener('touchstart', function(e) {
-              if (transitioning) return;
+              // Always unlock on new touch — clears any stuck state
+              unlock();
               var t = e.touches[0];
               startX = t.clientX;
               startY = t.clientY;
@@ -491,15 +506,13 @@ export default async function HomePage() {
               if (!lockAxis) {
                 if (Math.abs(dx) > Math.abs(dy) + 4) { lockAxis = 'h'; }
                 else if (Math.abs(dy) > Math.abs(dx) + 4) { lockAxis = 'v'; dragging = false; return; }
+                else { return; }
               }
 
               if (lockAxis !== 'h') return;
 
               dragDelta = dx;
-              var resistance = 1;
-              if ((current === 0 && dx > 0) || (current === slideCount - 1 && dx < 0)) {
-                resistance = 0.3;
-              }
+              var resistance = (current === 0 && dx > 0) || (current === slideCount - 1 && dx < 0) ? 0.3 : 1;
               track.style.transform = 'translateX(' + (-(current + 1) * getW() + dragDelta * resistance) + 'px)';
             }, { passive: true });
 
@@ -509,24 +522,32 @@ export default async function HomePage() {
               lockAxis = null;
 
               var elapsed = Date.now() - startTime;
-              var velocity = Math.abs(dragDelta) / elapsed;
+              var velocity = Math.abs(dragDelta) / Math.max(elapsed, 1);
               var isFlick = velocity > 0.3 && elapsed < 350;
 
               transitioning = true;
 
               if (dragDelta < -40 || (isFlick && dragDelta < 0)) { goTo(current + 1, true); }
               else if (dragDelta > 40 || (isFlick && dragDelta > 0)) { goTo(current - 1, true); }
-              else { goTo(current, true); transitioning = false; }
+              else { goTo(current, true); }
+            }, { passive: true });
+
+            // Handles OS interruptions — notification, call, system gesture
+            wrapper.addEventListener('touchcancel', function() {
+              dragging = false;
+              lockAxis = null;
+              goTo(current, true);
             }, { passive: true });
 
             dots.forEach(function(dot) {
               dot.addEventListener('click', function() {
+                unlock();
                 transitioning = true;
                 goTo(parseInt(dot.getAttribute('data-dot')), true);
               });
             });
 
-            window.addEventListener('resize', function() { setPos(current, false); });
+            window.addEventListener('resize', function() { unlock(); setPos(current, false); });
           }
 
           function init() { setTimeout(initMobileHero, 50); }
@@ -537,14 +558,10 @@ export default async function HomePage() {
             init();
           }
 
-          // Reinitialize on back/forward navigation and page restore
           window.addEventListener('pageshow', function(e) {
-            if (e.persisted) {
-              setTimeout(initMobileHero, 80);
-            }
+            if (e.persisted) { setTimeout(initMobileHero, 80); }
           });
 
-          // Also handle Next.js client-side navigation visibility
           document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'visible') {
               var track = document.getElementById('mobile-hero-track');
