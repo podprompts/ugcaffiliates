@@ -529,11 +529,34 @@ export default async function HomePage() {
             window.addEventListener('resize', function() { setPos(current, false); });
           }
 
+          function init() { setTimeout(initMobileHero, 50); }
+
           if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(initMobileHero, 50); });
+            document.addEventListener('DOMContentLoaded', init);
           } else {
-            setTimeout(initMobileHero, 50);
+            init();
           }
+
+          // Reinitialize on back/forward navigation and page restore
+          window.addEventListener('pageshow', function(e) {
+            if (e.persisted) {
+              setTimeout(initMobileHero, 80);
+            }
+          });
+
+          // Also handle Next.js client-side navigation visibility
+          document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+              var track = document.getElementById('mobile-hero-track');
+              if (track && track.children.length > 0) {
+                var w = track.querySelector('.mobile-hero-slide');
+                if (w) {
+                  track.style.transition = 'none';
+                  track.style.transform = 'translateX(' + (-(1) * (w.offsetWidth + 8)) + 'px)';
+                }
+              }
+            }
+          });
         })();
       ` }} />
     </div>
