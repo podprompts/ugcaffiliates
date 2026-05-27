@@ -20,6 +20,37 @@ async function getFeaturedProducts() {
   return data ?? []
 }
 
+async function getTrendingProducts() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  const { data } = await supabase
+    .from('products')
+    .select('id, slug, title, price, commission_rate, image_url, images, category, total_conversions, profiles!vendor_id(full_name)')
+    .eq('status', 'active')
+    .order('total_conversions', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(10)
+  return data ?? []
+}
+
+async function getRecentProducts() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await supabase
+    .from('products')
+    .select('id, slug, title, price, commission_rate, image_url, images, category, profiles!vendor_id(full_name)')
+    .eq('status', 'active')
+    .gte('created_at', thirtyDaysAgo)
+    .order('created_at', { ascending: false })
+    .limit(10)
+  return data ?? []
+}
+
 async function getStats() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -65,9 +96,22 @@ const CATEGORIES = [
   'SaaS & Software', 'Fitness', 'Home & Living', 'Food & Drink',
 ]
 
+const AI_CARDS = [
+  { platform: 'TikTok — Hook', text: '"POV: you found the product everyone\'s buying but nobody\'s talking about yet…"', meta: 'Beauty & Wellness · 28% commission' },
+  { platform: 'Instagram — Caption', text: '"This changed my morning routine completely. Link in bio if you want in."', meta: 'Wellness Course · 40% commission' },
+  { platform: 'Email — Swipe copy', text: '"Hey [name] — I rarely send these but this one is converting at 8% and I had to share…"', meta: 'SaaS Tool · 35% recurring commission' },
+  { platform: 'YouTube — Hook', text: '"I tested this for 30 days so you don\'t have to — here\'s what actually happened."', meta: 'Fitness · 30% commission' },
+  { platform: 'Twitter/X — Thread', text: '"Quietly, one of the best affiliate programs I\'ve ever promoted. Here\'s why 🧵"', meta: 'Digital Products · 50% commission' },
+]
+
 export default async function HomePage() {
-  const [featuredProducts, stats, categoryCounts, loggedIn] = await Promise.all([
-    getFeaturedProducts(), getStats(), getCategoryCounts(), getLoggedInUser(),
+  const [featuredProducts, trendingProducts, recentProducts, stats, categoryCounts, loggedIn] = await Promise.all([
+    getFeaturedProducts(),
+    getTrendingProducts(),
+    getRecentProducts(),
+    getStats(),
+    getCategoryCounts(),
+    getLoggedInUser(),
   ])
 
   const fmt = (n: number) =>
@@ -115,18 +159,23 @@ export default async function HomePage() {
         .section-link { font-size: 11px; color: #b5a99a; letter-spacing: 0.08em; text-decoration: none; }
         .section-link:hover { color: #1a1a1a; }
 
-        .cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #e8e4de; }
-        .cat-card { background: #faf9f7; padding: 28px 24px; text-decoration: none; display: block; }
-        .cat-card:hover { background: #f5f2ed; }
+        /* Category carousel */
+        .cat-carousel-wrap { position: relative; }
+        .cat-carousel-track { display: flex; gap: 1px; overflow-x: auto; scrollbar-width: none; padding: 0 2.5rem; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; }
+        .cat-carousel-track::-webkit-scrollbar { display: none; }
+        .cat-carousel-card { flex-shrink: 0; width: calc(28% - 1px); background: #faf9f7; border: 1px solid #e8e4de; padding: 28px 24px; text-decoration: none; display: block; scroll-snap-align: start; }
+        .cat-carousel-card:hover { background: #f5f2ed; }
         .cat-name { font-family: var(--font-cormorant), serif; font-size: 1.15rem; font-weight: 400; color: #1a1a1a; margin-bottom: 5px; }
         .cat-count { font-size: 11px; color: #b5a99a; letter-spacing: 0.04em; }
 
+        /* How it works */
         .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
         .how-num { font-family: var(--font-cormorant), serif; font-size: 3rem; font-weight: 400; color: #e8e4de; line-height: 1; margin-bottom: 14px; }
         .how-title { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
         .how-body { font-size: 13px; color: #888; line-height: 1.75; }
         .how-tag { display: inline-block; margin-top: 14px; font-size: 10px; color: #b5a99a; border: 1px solid #e8e4de; padding: 3px 10px; letter-spacing: 0.08em; }
 
+        /* Editorial split */
         .editorial { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #e8e4de; border-bottom: 1px solid #e8e4de; }
         .edit-pane { padding: 52px 2.5rem; }
         .edit-eyebrow { font-size: 10px; letter-spacing: 0.2em; color: #b5a99a; text-transform: uppercase; margin-bottom: 16px; }
@@ -136,25 +185,29 @@ export default async function HomePage() {
         .edit-feature { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #888; }
         .edit-dot { width: 3px; height: 3px; background: #b5a99a; border-radius: 50%; flex-shrink: 0; }
 
-        .ai-strip { background: #1a1a1a; padding: 52px 2.5rem; border-bottom: 1px solid #1a1a1a; }
-        .ai-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 4rem; align-items: center; }
+        /* AI strip carousel */
+        .ai-strip { background: #1a1a1a; padding: 52px 0 52px; border-bottom: 1px solid #1a1a1a; }
+        .ai-strip-header { padding: 0 2.5rem; margin-bottom: 2rem; }
         .ai-eyebrow { font-size: 10px; letter-spacing: 0.2em; color: #444; text-transform: uppercase; margin-bottom: 16px; }
-        .ai-h2 { font-family: var(--font-cormorant), serif; font-size: 2.5rem; font-weight: 400; color: #faf9f7; line-height: 1.15; margin-bottom: 14px; letter-spacing: -0.01em; }
-        .ai-sub { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 22px; }
-        .ai-tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .ai-h2 { font-family: var(--font-cormorant), serif; font-size: 2.5rem; font-weight: 400; color: #faf9f7; line-height: 1.15; margin-bottom: 8px; letter-spacing: -0.01em; }
+        .ai-sub { font-size: 13px; color: #555; line-height: 1.8; }
+        .ai-carousel-track { display: flex; gap: 1px; overflow-x: auto; scrollbar-width: none; padding: 0 2.5rem; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; }
+        .ai-carousel-track::-webkit-scrollbar { display: none; }
+        .ai-carousel-card { flex-shrink: 0; width: calc(33% - 1px); background: #111; padding: 24px; scroll-snap-align: start; border: 1px solid #2a2a2a; }
+        .ai-platform { font-size: 10px; color: #444; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 10px; }
+        .ai-text { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 12px; }
+        .ai-meta { font-size: 10px; color: #2a2a2a; }
+        .ai-tag-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2.5rem; margin-top: 1.5rem; }
         .ai-tag { font-size: 11px; color: #444; border: 1px solid #2a2a2a; padding: 5px 12px; letter-spacing: 0.04em; }
-        .ai-cards { display: flex; flex-direction: column; gap: 1px; background: #2a2a2a; }
-        .ai-card { background: #111; padding: 18px 20px; }
-        .ai-platform { font-size: 10px; color: #444; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 7px; }
-        .ai-text { font-size: 13px; color: #666; line-height: 1.6; }
-        .ai-meta { font-size: 10px; color: #2a2a2a; margin-top: 6px; }
 
+        /* CTA */
         .cta { padding: 80px 2.5rem; text-align: center; background: #1a1a1a; }
         .cta-eyebrow { font-size: 10px; letter-spacing: 0.22em; color: #444; text-transform: uppercase; margin-bottom: 16px; }
         .cta-h2 { font-family: var(--font-cormorant), serif; font-size: 3rem; font-weight: 400; color: #faf9f7; margin-bottom: 12px; letter-spacing: -0.01em; line-height: 1.1; }
         .cta-sub { font-size: 13px; color: #555; margin-bottom: 32px; line-height: 1.7; }
         .cta-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
+        /* Footer */
         .footer { border-top: 1px solid #2a2a2a; background: #1a1a1a; padding: 24px 2.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
         .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
         .footer-links a { font-size: 11px; color: #444; text-decoration: none; letter-spacing: 0.04em; }
@@ -178,7 +231,9 @@ export default async function HomePage() {
         .mobile-hero-dot.active { background: #ffffff; height: 14px; border-radius: 2px; }
 
         /* Responsive */
-        @media (max-width: 1024px) { .ai-grid { grid-template-columns: 1fr; gap: 2rem; } }
+        @media (max-width: 1024px) {
+          .ai-carousel-card { width: calc(45% - 1px); }
+        }
         @media (max-width: 768px) {
           .invite-banner { display: none; }
           .hero { grid-template-columns: 1fr; border-bottom: none; }
@@ -189,17 +244,22 @@ export default async function HomePage() {
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
           .pill-row { padding: 16px 1rem; }
           .section { padding: 36px 1.5rem; }
-          .cat-grid { grid-template-columns: repeat(2, 1fr); }
+          .cat-carousel-track { padding: 0 1rem; }
+          .cat-carousel-card { width: calc(72% - 1px); }
           .how-grid { grid-template-columns: 1fr; gap: 2rem; }
           .editorial { grid-template-columns: 1fr; }
           .edit-pane { padding: 36px 1.5rem; }
-          .ai-strip { padding: 36px 1.5rem; }
+          .ai-strip { padding: 36px 0; }
+          .ai-strip-header { padding: 0 1.5rem; }
+          .ai-carousel-track { padding: 0 1rem; }
+          .ai-carousel-card { width: calc(82% - 1px); }
+          .ai-tag-row { padding: 0 1.5rem; }
           .cta { padding: 52px 1.5rem; }
           .footer { padding: 20px 1.5rem; }
         }
         @media (max-width: 480px) {
-          .cat-grid { grid-template-columns: 1fr; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
+          .cat-carousel-card { width: calc(80% - 1px); }
         }
       `}</style>
 
@@ -210,6 +270,7 @@ export default async function HomePage() {
         <Link href="/signup" className="invite-banner-link">Request your invite →</Link>
       </div>
 
+      {/* Hero */}
       <div className="hero">
         <div className="hero-left">
           <div className="hero-eyebrow">Affiliate platform · Invite Only</div>
@@ -253,6 +314,7 @@ export default async function HomePage() {
         </div>
       </div>
 
+      {/* Stat bar */}
       <div className="stat-bar">
         {[
           { val: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', label: 'Total commissions tracked' },
@@ -267,12 +329,25 @@ export default async function HomePage() {
         ))}
       </div>
 
+      {/* Category pills */}
       <div className="pill-row">
         {CATEGORIES.map(cat => (
           <Link key={cat} href={`/marketplace?category=${encodeURIComponent(cat)}`} className="pill">{cat}</Link>
         ))}
       </div>
 
+      {/* Trending products */}
+      {trendingProducts.length > 0 && (
+        <div className="section">
+          <div className="section-head">
+            <div className="section-title">Trending</div>
+            <Link href="/marketplace" className="section-link">View all →</Link>
+          </div>
+          <ProductCarousel products={trendingProducts as any} loggedIn={loggedIn} />
+        </div>
+      )}
+
+      {/* Featured products */}
       {featuredProducts.length > 0 && (
         <div className="section">
           <div className="section-head">
@@ -283,23 +358,29 @@ export default async function HomePage() {
         </div>
       )}
 
+      {/* Browse by category — peek carousel */}
       <div className="section">
         <div className="section-head">
           <div className="section-title">Browse by category</div>
+          <Link href="/marketplace" className="section-link">All categories →</Link>
         </div>
-        <div className="cat-grid">
-          {CATEGORIES.map(name => {
-            const count = categoryCounts[name] ?? 0
-            return (
-              <Link key={name} href={`/marketplace?category=${encodeURIComponent(name)}`} className="cat-card">
-                <div className="cat-name">{name}</div>
-                <div className="cat-count">{count > 0 ? `${count} product${count !== 1 ? 's' : ''}` : 'Coming soon'}</div>
-              </Link>
-            )
-          })}
+        <div className="cat-carousel-wrap">
+          <div className="cat-carousel-track">
+            {CATEGORIES.map(name => {
+              const count = categoryCounts[name] ?? 0
+              return (
+                <Link key={name} href={`/marketplace?category=${encodeURIComponent(name)}`} className="cat-carousel-card">
+                  <div className="cat-name">{name}</div>
+                  <div className="cat-count">{count > 0 ? `${count} product${count !== 1 ? 's' : ''}` : 'Coming soon'}</div>
+                </Link>
+              )
+            })}
+          </div>
+          <div style={{ position: 'absolute', top: 0, right: 0, width: '4rem', height: '100%', background: 'linear-gradient(to left, #faf9f7, transparent)', pointerEvents: 'none' }} />
         </div>
       </div>
 
+      {/* How it works — stays vertical */}
       <div className="section">
         <div className="section-head">
           <div className="section-title">How it works</div>
@@ -320,6 +401,18 @@ export default async function HomePage() {
         </div>
       </div>
 
+      {/* Recently added */}
+      {recentProducts.length > 0 && (
+        <div className="section">
+          <div className="section-head">
+            <div className="section-title">Recently added</div>
+            <Link href="/marketplace" className="section-link">View all →</Link>
+          </div>
+          <ProductCarousel products={recentProducts as any} loggedIn={loggedIn} />
+        </div>
+      )}
+
+      {/* Vendor / Affiliate split */}
       <div className="editorial">
         <div className="edit-pane" style={{ background: '#faf9f7', borderRight: '1px solid #e8e4de' }}>
           <div className="edit-eyebrow">For affiliates</div>
@@ -345,34 +438,33 @@ export default async function HomePage() {
         </div>
       </div>
 
+      {/* AI strip — swipeable carousel */}
       <div className="ai-strip">
-        <div className="ai-grid">
-          <div>
-            <div className="ai-eyebrow">AI-powered</div>
-            <h2 className="ai-h2">The platform that writes<br />your pitch for you.</h2>
-            <p className="ai-sub">Every product listing includes AI-generated affiliate assets. Affiliates start selling in minutes — not days.</p>
-            <div className="ai-tag-row">
-              {['TikTok hooks', 'IG captions', 'Email swipes', 'YouTube scripts', 'AI UGC video'].map(tag => (
-                <span key={tag} className="ai-tag">{tag}</span>
-              ))}
-            </div>
-          </div>
-          <div className="ai-cards">
-            {[
-              { platform: 'TikTok — Hook', text: '"POV: you found the product everyone\'s buying but nobody\'s talking about yet…"', meta: 'Beauty & Wellness · 28% commission' },
-              { platform: 'Instagram — Caption', text: '"This changed my morning routine completely. Link in bio if you want in."', meta: 'Wellness Course · 40% commission' },
-              { platform: 'Email — Swipe copy', text: '"Hey [name] — I rarely send these but this one is converting at 8% and I had to share…"', meta: 'SaaS Tool · 35% recurring commission' },
-            ].map(card => (
-              <div key={card.platform} className="ai-card">
+        <div className="ai-strip-header">
+          <div className="ai-eyebrow">AI-powered</div>
+          <h2 className="ai-h2">The platform that writes<br />your pitch for you.</h2>
+          <p className="ai-sub">Every product listing includes AI-generated affiliate assets. Affiliates start selling in minutes — not days.</p>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <div className="ai-carousel-track">
+            {AI_CARDS.map(card => (
+              <div key={card.platform} className="ai-carousel-card">
                 <div className="ai-platform">{card.platform}</div>
                 <div className="ai-text">{card.text}</div>
                 <div className="ai-meta">{card.meta}</div>
               </div>
             ))}
           </div>
+          <div style={{ position: 'absolute', top: 0, right: 0, width: '4rem', height: '100%', background: 'linear-gradient(to left, #1a1a1a, transparent)', pointerEvents: 'none' }} />
+        </div>
+        <div className="ai-tag-row">
+          {['TikTok hooks', 'IG captions', 'Email swipes', 'YouTube scripts', 'AI UGC video'].map(tag => (
+            <span key={tag} className="ai-tag">{tag}</span>
+          ))}
         </div>
       </div>
 
+      {/* CTA */}
       <div className="cta">
         <div className="cta-eyebrow">Get started today</div>
         <h2 className="cta-h2">Ready to grow<br />your reach?</h2>
@@ -436,7 +528,6 @@ export default async function HomePage() {
               var playPromise = video.play();
               if (playPromise !== undefined) {
                 playPromise.catch(function() {
-                  // Autoplay blocked — video stays muted and will play on next interaction
                   video.muted = true;
                   video.play();
                 });
@@ -508,7 +599,6 @@ export default async function HomePage() {
             var wrapper = track.parentElement;
 
             wrapper.addEventListener('touchstart', function(e) {
-              // Always unlock on new touch — clears any stuck state
               unlock();
               var t = e.touches[0];
               startX = t.clientX;
@@ -525,15 +615,12 @@ export default async function HomePage() {
               var t = e.touches[0];
               var dx = t.clientX - startX;
               var dy = t.clientY - startY;
-
               if (!lockAxis) {
                 if (Math.abs(dx) > Math.abs(dy) + 4) { lockAxis = 'h'; }
                 else if (Math.abs(dy) > Math.abs(dx) + 4) { lockAxis = 'v'; dragging = false; return; }
                 else { return; }
               }
-
               if (lockAxis !== 'h') return;
-
               dragDelta = dx;
               var resistance = (current === 0 && dx > 0) || (current === slideCount - 1 && dx < 0) ? 0.3 : 1;
               track.style.transform = 'translateX(' + (-(current + 1) * getW() + dragDelta * resistance) + 'px)';
@@ -543,19 +630,15 @@ export default async function HomePage() {
               if (!dragging) return;
               dragging = false;
               lockAxis = null;
-
               var elapsed = Date.now() - startTime;
               var velocity = Math.abs(dragDelta) / Math.max(elapsed, 1);
               var isFlick = velocity > 0.3 && elapsed < 350;
-
               transitioning = true;
-
               if (dragDelta < -40 || (isFlick && dragDelta < 0)) { goTo(current + 1, true); }
               else if (dragDelta > 40 || (isFlick && dragDelta > 0)) { goTo(current - 1, true); }
               else { goTo(current, true); }
             }, { passive: true });
 
-            // Handles OS interruptions — notification, call, system gesture
             wrapper.addEventListener('touchcancel', function() {
               dragging = false;
               lockAxis = null;
