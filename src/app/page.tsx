@@ -31,11 +31,7 @@ async function getStats() {
     supabase.from('conversions').select('commission_amount').eq('status', 'paid'),
   ])
   const totalCommissions = (convData ?? []).reduce((s: number, c: any) => s + (c.commission_amount ?? 0), 0)
-  return {
-    affiliates: affiliates ?? 0,
-    products:   products ?? 0,
-    commissions: totalCommissions,
-  }
+  return { affiliates: affiliates ?? 0, products: products ?? 0, commissions: totalCommissions }
 }
 
 async function getCategoryCounts() {
@@ -43,10 +39,7 @@ async function getCategoryCounts() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
-  const { data } = await supabase
-    .from('products')
-    .select('category')
-    .eq('status', 'active')
+  const { data } = await supabase.from('products').select('category').eq('status', 'active')
   const counts: Record<string, number> = {}
   for (const row of data ?? []) {
     if (row.category) counts[row.category] = (counts[row.category] ?? 0) + 1
@@ -60,18 +53,11 @@ async function getLoggedInUser() {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll() {},
-        },
-      }
+      { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } }
     )
     const { data: { user } } = await supabase.auth.getUser()
     return !!user
-  } catch {
-    return false
-  }
+  } catch { return false }
 }
 
 const CATEGORIES = [
@@ -81,10 +67,7 @@ const CATEGORIES = [
 
 export default async function HomePage() {
   const [featuredProducts, stats, categoryCounts, loggedIn] = await Promise.all([
-    getFeaturedProducts(),
-    getStats(),
-    getCategoryCounts(),
-    getLoggedInUser(),
+    getFeaturedProducts(), getStats(), getCategoryCounts(), getLoggedInUser(),
   ])
 
   const fmt = (n: number) =>
@@ -109,7 +92,7 @@ export default async function HomePage() {
         .hero-video-cell { overflow: hidden; background: #1a1a1a; aspect-ratio: 3/4; }
         .hero-video-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
         .hero-desktop-cell { display: block; }
-        .hero-mobile-overlay { display: none; }
+        .hero-mobile-overlay { display: none; overflow: hidden; }
         .hero-mobile-overlay-inner { position: relative; overflow: visible; min-height: 200px; background: #1a1a1a; }
 
         .btn-primary { background: #1a1a1a; color: #faf9f7; font-size: 11px; font-weight: 600; padding: 10px 24px; border: 1px solid #1a1a1a; cursor: pointer; letter-spacing: 0.08em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
@@ -178,31 +161,26 @@ export default async function HomePage() {
         .footer-links a:hover { color: #888; }
         .footer-copy { font-size: 11px; color: #333; }
 
-        /* ── Mobile overlay hero styles ── */
+        /* Mobile overlay hero */
         .mobile-hero-track { display: flex; will-change: transform; }
         .mobile-hero-slide { flex-shrink: 0; width: 88%; position: relative; margin-right: 8px; }
         .mobile-hero-slide video { width: 100%; aspect-ratio: 9/14; object-fit: cover; display: block; }
         .mobile-hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.42) 45%, rgba(0,0,0,0.08) 100%); pointer-events: none; }
-        .mobile-hero-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 20px 22px; }
+        .mobile-hero-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 20px 22px; pointer-events: none; }
         .mobile-hero-eyebrow { font-size: 9px; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 10px; }
         .mobile-hero-h1 { font-family: var(--font-cormorant), serif; font-size: 2.5rem; font-weight: 400; color: #ffffff; line-height: 1.08; margin-bottom: 10px; letter-spacing: -0.01em; }
         .mobile-hero-sub { font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.65; margin-bottom: 18px; max-width: 34ch; }
-        .mobile-hero-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-        .mobile-btn-primary { background: #ffffff; color: #1a1a1a; font-size: 10px; font-weight: 700; padding: 9px 20px; letter-spacing: 0.08em; text-decoration: none; display: inline-block; }
-        .mobile-btn-ghost { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 500; padding: 9px 20px; border: 1px solid rgba(255,255,255,0.28); letter-spacing: 0.06em; text-decoration: none; display: inline-block; }
-        .mobile-hero-dots { position: absolute; right: 14px; top: 50%; transform: translateY(-60%); display: flex; flex-direction: column; gap: 5px; z-index: 2; }
+        .mobile-hero-btns { display: flex; gap: 8px; flex-wrap: wrap; pointer-events: auto; }
+        .mobile-btn-primary { background: #ffffff; color: #1a1a1a; font-size: 10px; font-weight: 700; padding: 9px 20px; letter-spacing: 0.08em; text-decoration: none; display: inline-block; pointer-events: auto; }
+        .mobile-btn-ghost { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 500; padding: 9px 20px; border: 1px solid rgba(255,255,255,0.28); letter-spacing: 0.06em; text-decoration: none; display: inline-block; pointer-events: auto; }
+        .mobile-hero-dots { position: absolute; right: 14px; top: 50%; transform: translateY(-60%); display: flex; flex-direction: column; gap: 5px; z-index: 2; pointer-events: auto; }
         .mobile-hero-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.35); border: none; padding: 0; cursor: pointer; transition: background 0.2s, height 0.2s; }
         .mobile-hero-dot.active { background: #ffffff; height: 14px; border-radius: 2px; }
 
-        /* ── Responsive ── */
-        @media (max-width: 1024px) {
-          .ai-grid { grid-template-columns: 1fr; gap: 2rem; }
-        }
+        /* Responsive */
+        @media (max-width: 1024px) { .ai-grid { grid-template-columns: 1fr; gap: 2rem; } }
         @media (max-width: 768px) {
           .invite-banner { display: none; }
-          .invite-banner { padding: 10px 1rem; }
-          .invite-banner-text { font-size: 11px; }
-          .invite-banner-link { font-size: 11px; white-space: nowrap; }
           .hero { grid-template-columns: 1fr; border-bottom: none; }
           .hero-left { display: none; }
           .hero-right { display: block !important; background: none; border-bottom: 1px solid #e8e4de; }
@@ -227,17 +205,14 @@ export default async function HomePage() {
 
       <Navbar />
 
-      {/* Invite banner — hidden on mobile, visible on desktop */}
       <div className="invite-banner">
         <span className="invite-banner-text">Invite-only access — currently accepting applications from select vendors & creators</span>
         <Link href="/signup" className="invite-banner-link">Request your invite →</Link>
       </div>
 
-      {/* Hero */}
       <div className="hero">
-        {/* Desktop left copy — hidden on mobile */}
         <div className="hero-left">
-          <div className="hero-eyebrow">Affiliate platform · By Invite Only</div>
+          <div className="hero-eyebrow">Affiliate platform · Invite Only</div>
           <h1 className="hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
           <p className="hero-sub">A curated marketplace connecting vetted vendors with motivated creators. Apply to promote, share your link, collect commissions directly.</p>
           <div className="hero-btns">
@@ -247,7 +222,6 @@ export default async function HomePage() {
         </div>
 
         <div className="hero-right">
-          {/* Desktop 2x2 grid */}
           <div className="hero-desktop-cell hero-video-cell">
             <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
           </div>
@@ -261,18 +235,12 @@ export default async function HomePage() {
             <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
           </div>
 
-          {/* Mobile full-width overlay hero */}
           <div className="hero-mobile-overlay">
             <div className="hero-mobile-overlay-inner">
-              {/* Slides injected dynamically by script */}
               <div id="mobile-hero-track" className="mobile-hero-track" />
-
-              {/* Dots injected dynamically by script */}
               <div id="mobile-hero-dots" className="mobile-hero-dots" />
-
-              {/* Copy overlaid on video */}
               <div className="mobile-hero-content">
-                <div className="mobile-hero-eyebrow">Affiliate platform · By invite only</div>
+                <div className="mobile-hero-eyebrow">Affiliate platform · Invite only</div>
                 <h1 className="mobile-hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
                 <p className="mobile-hero-sub">A curated marketplace connecting vetted vendors with motivated creators.</p>
                 <div className="mobile-hero-btns">
@@ -285,7 +253,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* Stat bar */}
       <div className="stat-bar">
         {[
           { val: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', label: 'Total commissions tracked' },
@@ -300,14 +267,12 @@ export default async function HomePage() {
         ))}
       </div>
 
-      {/* Category pills */}
       <div className="pill-row">
         {CATEGORIES.map(cat => (
           <Link key={cat} href={`/marketplace?category=${encodeURIComponent(cat)}`} className="pill">{cat}</Link>
         ))}
       </div>
 
-      {/* Featured products */}
       {featuredProducts.length > 0 && (
         <div className="section">
           <div className="section-head">
@@ -318,7 +283,6 @@ export default async function HomePage() {
         </div>
       )}
 
-      {/* Browse by category */}
       <div className="section">
         <div className="section-head">
           <div className="section-title">Browse by category</div>
@@ -336,7 +300,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* How it works */}
       <div className="section">
         <div className="section-head">
           <div className="section-title">How it works</div>
@@ -357,7 +320,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* Vendor / Affiliate split */}
       <div className="editorial">
         <div className="edit-pane" style={{ background: '#faf9f7', borderRight: '1px solid #e8e4de' }}>
           <div className="edit-eyebrow">For affiliates</div>
@@ -383,7 +345,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* AI strip */}
       <div className="ai-strip">
         <div className="ai-grid">
           <div>
@@ -412,7 +373,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* CTA */}
       <div className="cta">
         <div className="cta-eyebrow">Get started today</div>
         <h2 className="cta-h2">Ready to grow<br />your reach?</h2>
@@ -423,7 +383,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="footer">
         <div style={{ fontFamily: 'var(--font-cormorant), serif', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.22em', color: '#444' }}>U G C A</div>
         <div className="footer-links">
@@ -436,7 +395,6 @@ export default async function HomePage() {
         <div className="footer-copy">© 2026 UGCAffiliates · HONNYDO LLC.</div>
       </footer>
 
-      {/* Carousel script — mobile only, random start, dynamic slides */}
       <script dangerouslySetInnerHTML={{ __html: `
         (function() {
           function initMobileHero() {
@@ -444,19 +402,16 @@ export default async function HomePage() {
             var dotsContainer = document.getElementById('mobile-hero-dots');
             if (!track || !dotsContainer) return;
 
-            // ── Video list — add/remove filenames here freely ──
             var videos = ['hero1.mp4', 'hero2.mp4', 'hero3.mp4', 'hero4.mp4'];
 
-            // Shuffle videos randomly on every page load
             for (var i = videos.length - 1; i > 0; i--) {
               var j = Math.floor(Math.random() * (i + 1));
               var tmp = videos[i]; videos[i] = videos[j]; videos[j] = tmp;
             }
 
             var slideCount = videos.length;
-
-            // Build slides dynamically: clone-last + real slides + clone-first
             var allSlides = [videos[slideCount - 1]].concat(videos).concat([videos[0]]);
+
             track.innerHTML = '';
             allSlides.forEach(function(src) {
               var slide = document.createElement('div');
@@ -465,29 +420,33 @@ export default async function HomePage() {
               track.appendChild(slide);
             });
 
-            // Build dots dynamically
             dotsContainer.innerHTML = '';
             videos.forEach(function(_, i) {
               var btn = document.createElement('button');
               btn.className = 'mobile-hero-dot' + (i === 0 ? ' active' : '');
-              btn.setAttribute('data-dot', i);
+              btn.setAttribute('data-dot', String(i));
               dotsContainer.appendChild(btn);
             });
             var dots = dotsContainer.querySelectorAll('.mobile-hero-dot');
 
             var current = 0;
             var startX = 0;
+            var startY = 0;
+            var startTime = 0;
             var dragging = false;
             var dragDelta = 0;
             var transitioning = false;
+            var lockAxis = null;
 
             function getW() {
               var s = track.querySelector('.mobile-hero-slide');
-              return s ? s.offsetWidth : window.innerWidth;
+              return s ? s.offsetWidth + 8 : window.innerWidth;
             }
 
             function setPos(idx, animate) {
-              track.style.transition = animate ? 'transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94)' : 'none';
+              track.style.transition = animate
+                ? 'transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94)'
+                : 'none';
               track.style.transform = 'translateX(' + (-(idx + 1) * getW()) + 'px)';
             }
 
@@ -504,33 +463,61 @@ export default async function HomePage() {
             setPos(0, false);
 
             track.addEventListener('transitionend', function() {
-              if (current === slideCount) { goTo(0, false); }
-              else if (current === -1) { goTo(slideCount - 1, false); }
+              if (current === slideCount) goTo(0, false);
+              else if (current === -1) goTo(slideCount - 1, false);
               transitioning = false;
             });
 
-            track.addEventListener('touchstart', function(e) {
+            var wrapper = track.parentElement;
+
+            wrapper.addEventListener('touchstart', function(e) {
               if (transitioning) return;
-              startX = e.touches[0].clientX;
+              var t = e.touches[0];
+              startX = t.clientX;
+              startY = t.clientY;
+              startTime = Date.now();
               dragging = true;
               dragDelta = 0;
+              lockAxis = null;
               track.style.transition = 'none';
             }, { passive: true });
 
-            track.addEventListener('touchmove', function(e) {
+            wrapper.addEventListener('touchmove', function(e) {
               if (!dragging) return;
-              dragDelta = e.touches[0].clientX - startX;
-              track.style.transform = 'translateX(' + (-(current + 1) * getW() + dragDelta) + 'px)';
+              var t = e.touches[0];
+              var dx = t.clientX - startX;
+              var dy = t.clientY - startY;
+
+              if (!lockAxis) {
+                if (Math.abs(dx) > Math.abs(dy) + 4) { lockAxis = 'h'; }
+                else if (Math.abs(dy) > Math.abs(dx) + 4) { lockAxis = 'v'; dragging = false; return; }
+              }
+
+              if (lockAxis !== 'h') return;
+
+              dragDelta = dx;
+              var resistance = 1;
+              if ((current === 0 && dx > 0) || (current === slideCount - 1 && dx < 0)) {
+                resistance = 0.3;
+              }
+              track.style.transform = 'translateX(' + (-(current + 1) * getW() + dragDelta * resistance) + 'px)';
             }, { passive: true });
 
-            track.addEventListener('touchend', function() {
+            wrapper.addEventListener('touchend', function() {
               if (!dragging) return;
               dragging = false;
+              lockAxis = null;
+
+              var elapsed = Date.now() - startTime;
+              var velocity = Math.abs(dragDelta) / elapsed;
+              var isFlick = velocity > 0.3 && elapsed < 350;
+
               transitioning = true;
-              if (dragDelta < -50) { goTo(current + 1, true); }
-              else if (dragDelta > 50) { goTo(current - 1, true); }
+
+              if (dragDelta < -40 || (isFlick && dragDelta < 0)) { goTo(current + 1, true); }
+              else if (dragDelta > 40 || (isFlick && dragDelta > 0)) { goTo(current - 1, true); }
               else { goTo(current, true); transitioning = false; }
-            });
+            }, { passive: true });
 
             dots.forEach(function(dot) {
               dot.addEventListener('click', function() {
@@ -543,12 +530,10 @@ export default async function HomePage() {
           }
 
           if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(initMobileHero, 50);
-  });
-} else {
-  setTimeout(initMobileHero, 50);
-}
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(initMobileHero, 50); });
+          } else {
+            setTimeout(initMobileHero, 50);
+          }
         })();
       ` }} />
     </div>
