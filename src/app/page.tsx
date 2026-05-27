@@ -207,7 +207,7 @@ export default async function HomePage() {
           .hero-left { display: none; }
           .hero-right { display: block !important; background: none; border-bottom: 1px solid #e8e4de; }
           .hero-desktop-cell { display: none !important; }
-          .hero-mobile-overlay { display: none; overflow: hidden; }
+          .hero-mobile-overlay { display: block !important; overflow: hidden; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
           .pill-row { padding: 16px 1rem; }
           .section { padding: 36px 1.5rem; }
