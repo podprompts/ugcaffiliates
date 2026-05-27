@@ -20,9 +20,14 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'UGCAffiliates — The Affiliate Platform for Modern Creators',
+  title: 'UGCAffiliates – The Affiliate Platform for Modern Creators',
   description: 'Vendors list products. Affiliates promote them anywhere. Everyone gets paid automatically via Stripe.',
   keywords: 'affiliate marketing, ugc, creator economy, affiliate network',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
   openGraph: {
     title: 'UGCAffiliates',
     description: 'The affiliate platform built for modern creators.',
