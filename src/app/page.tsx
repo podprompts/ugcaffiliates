@@ -110,7 +110,7 @@ export default async function HomePage() {
         .hero-video-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
         .hero-desktop-cell { display: block; }
         .hero-mobile-overlay { display: none; }
-        .hero-mobile-overlay-inner { position: relative; overflow: hidden; min-height: 200px; background: #1a1a1a; }
+        .hero-mobile-overlay-inner { position: relative; overflow: visible; min-height: 200px; background: #1a1a1a; }
 
         .btn-primary { background: #1a1a1a; color: #faf9f7; font-size: 11px; font-weight: 600; padding: 10px 24px; border: 1px solid #1a1a1a; cursor: pointer; letter-spacing: 0.08em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
         .btn-ghost { background: none; color: #888; font-size: 11px; font-weight: 500; padding: 10px 24px; border: 1px solid #e0dbd4; cursor: pointer; letter-spacing: 0.06em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
@@ -180,7 +180,7 @@ export default async function HomePage() {
 
         /* ── Mobile overlay hero styles ── */
         .mobile-hero-track { display: flex; will-change: transform; }
-        .mobile-hero-slide { flex-shrink: 0; width: 100%; position: relative; }
+        .mobile-hero-slide { flex-shrink: 0; width: 88%; position: relative; margin-right: 8px; }
         .mobile-hero-slide video { width: 100%; aspect-ratio: 9/14; object-fit: cover; display: block; }
         .mobile-hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.42) 45%, rgba(0,0,0,0.08) 100%); pointer-events: none; }
         .mobile-hero-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 20px 22px; }
@@ -207,7 +207,7 @@ export default async function HomePage() {
           .hero-left { display: none; }
           .hero-right { display: block !important; background: none; border-bottom: 1px solid #e8e4de; }
           .hero-desktop-cell { display: none !important; }
-          .hero-mobile-overlay { display: block !important; }
+          .hero-mobile-overlay { display: none; overflow: hidden; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
           .pill-row { padding: 16px 1rem; }
           .section { padding: 36px 1.5rem; }
