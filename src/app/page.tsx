@@ -275,7 +275,7 @@ export default async function HomePage() {
         <div className="hero-left">
           <div className="hero-eyebrow">Affiliate platform · Invite Only</div>
           <h1 className="hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
-          <p className="hero-sub">A curated marketplace connecting vetted vendors with motivated affiliates. Apply to promote, share your link, and collect commissions directly via Stripe.</p>
+          <p className="hero-sub">A curated marketplace connecting vetted vendors with motivated affiliates. Apply to promote, share your link, and collect commissions directly via Stripe Connect.</p>
           <div className="hero-btns">
             <Link href="/signup" className="btn-primary">Request access</Link>
             <Link href="/marketplace" className="btn-ghost">Browse products</Link>
@@ -318,7 +318,7 @@ export default async function HomePage() {
       <div className="stat-bar">
         {[
           { val: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', label: 'Total commissions tracked' },
-          { val: stats.products > 0 ? `${stats.products}+` : 'New', label: 'Active products listed' },
+          { val: stats.products > 0 ? `${stats.products}+` : 'New', label: 'Beta products listed' },
           { val: stats.affiliates > 0 ? stats.affiliates.toLocaleString() : 'Growing', label: 'Registered affiliates' },
           { val: '30', label: 'Day cookie window' },
         ].map(s => (
@@ -389,7 +389,7 @@ export default async function HomePage() {
           {[
             { num: '01', title: 'Vendors list their product', body: 'Submit your product, set your commission rate, and define brand rules. AI generates TikTok hooks, captions, email swipes, and scripts for every affiliate automatically.', tag: 'For vendors' },
             { num: '02', title: 'Affiliates apply and promote', body: 'Browse the marketplace, apply to promote any product, and grab your unique tracked link. Post on TikTok, Instagram, YouTube, or your own site.', tag: 'For affiliates' },
-            { num: '03', title: 'Commissions pay automatically', body: 'Every confirmed sale fires a server-side postback. Commissions calculate in real time and pay via Stripe — no manual transfers, no minimums.', tag: 'Automatic' },
+            { num: '03', title: 'Commissions pay automatically', body: 'Every confirmed sale fires a server-side postback. Commissions calculate in real time and pay via Stripe Connect — no manual transfers, no minimums.', tag: 'Automatic' },
           ].map(s => (
             <div key={s.num}>
               <div className="how-num">{s.num}</div>

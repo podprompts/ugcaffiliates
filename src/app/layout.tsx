@@ -20,8 +20,13 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'UGCAffiliates – The Affiliate Platform for Modern Creators',
-  description: 'Vendors list products. Affiliates promote them anywhere. Everyone gets paid automatically via Stripe.',
+  metadataBase: new URL('https://ugcaffiliates.com'),
+  title: {
+    default: 'UGCAffiliates.com',
+    template: '%s | UGCAffiliates.com',
+  },
+  description:
+    'Connect with top brands, create authentic content, and earn commissions on every sale. Invite-only affiliate platform for creators & vendors.',
   keywords: 'affiliate marketing, ugc, creator economy, affiliate network',
   icons: {
     icon: '/favicon.svg',
@@ -29,11 +34,28 @@ export const metadata: Metadata = {
     apple: '/favicon.svg',
   },
   openGraph: {
-    title: 'UGCAffiliates',
-    description: 'The affiliate platform built for modern creators.',
+    title: 'UGCAffiliates.com — Promote Products. Earn Commissions.',
+    description:
+      'Connect with top brands, create authentic content, and earn commissions on every sale. Invite-only affiliate platform for creators & vendors.',
     url: 'https://ugcaffiliates.com',
-    siteName: 'UGCAffiliates',
+    siteName: 'UGCAffiliates.com',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'UGCAffiliates.com — Promote products. Earn a commission on sales.',
+      },
+    ],
+    locale: 'en_US',
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'UGCAffiliates.com — Promote Products. Earn Commissions.',
+    description:
+      'Connect with top brands, create authentic content, and earn commissions on every sale. Invite-only affiliate platform for creators & vendors.',
+    images: ['/og-image.png'],
   },
 }
 
