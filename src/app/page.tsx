@@ -7,55 +7,26 @@ import Navbar from '@/components/Navbar'
 import ProductCarousel from '@/components/ProductCarousel'
 
 async function getFeaturedProducts() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-  const { data } = await supabase
-    .from('products')
-    .select('id, slug, title, price, commission_rate, image_url, images, category, profiles!vendor_id(full_name)')
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .limit(10)
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+  const { data } = await supabase.from('products').select('id, slug, title, price, commission_rate, image_url, images, category, profiles!vendor_id(full_name)').eq('status', 'active').order('created_at', { ascending: false }).limit(10)
   return data ?? []
 }
 
 async function getTrendingProducts() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-  const { data } = await supabase
-    .from('products')
-    .select('id, slug, title, price, commission_rate, image_url, images, category, total_conversions, profiles!vendor_id(full_name)')
-    .eq('status', 'active')
-    .order('total_conversions', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(10)
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+  const { data } = await supabase.from('products').select('id, slug, title, price, commission_rate, image_url, images, category, total_conversions, profiles!vendor_id(full_name)').eq('status', 'active').order('total_conversions', { ascending: false }).order('created_at', { ascending: false }).limit(10)
   return data ?? []
 }
 
 async function getRecentProducts() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const { data } = await supabase
-    .from('products')
-    .select('id, slug, title, price, commission_rate, image_url, images, category, profiles!vendor_id(full_name)')
-    .eq('status', 'active')
-    .gte('created_at', thirtyDaysAgo)
-    .order('created_at', { ascending: false })
-    .limit(10)
+  const { data } = await supabase.from('products').select('id, slug, title, price, commission_rate, image_url, images, category, profiles!vendor_id(full_name)').eq('status', 'active').gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(10)
   return data ?? []
 }
 
 async function getStats() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
   const [{ count: affiliates }, { count: products }, { data: convData }] = await Promise.all([
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'affiliate'),
     supabase.from('products').select('*', { count: 'exact', head: true }).eq('status', 'active'),
@@ -66,58 +37,41 @@ async function getStats() {
 }
 
 async function getCategoryCounts() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
   const { data } = await supabase.from('products').select('category').eq('status', 'active')
   const counts: Record<string, number> = {}
-  for (const row of data ?? []) {
-    if (row.category) counts[row.category] = (counts[row.category] ?? 0) + 1
-  }
+  for (const row of data ?? []) { if (row.category) counts[row.category] = (counts[row.category] ?? 0) + 1 }
   return counts
 }
 
 async function getLoggedInUser() {
   try {
     const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } }
-    )
+    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } })
     const { data: { user } } = await supabase.auth.getUser()
     return !!user
   } catch { return false }
 }
 
-const CATEGORIES = [
-  'Digital Products', 'Courses & Education', 'Beauty & Wellness', 'Fashion & Apparel',
-  'SaaS & Software', 'Fitness', 'Home & Living', 'Food & Drink',
-]
+const CATEGORIES = ['Digital Products', 'Courses & Education', 'Beauty & Wellness', 'Fashion & Apparel', 'SaaS & Software', 'Fitness', 'Home & Living', 'Food & Drink']
 
 const AI_CARDS = [
-  { platform: 'TikTok — Hook', text: '"POV: you found the product everyone\'s buying but nobody\'s talking about yet…"', meta: 'Beauty & Wellness · 28% commission' },
+  { platform: 'TikTok — Hook', text: `"POV: you found the product everyone's buying but nobody's talking about yet…"`, meta: 'Beauty & Wellness · 28% commission' },
   { platform: 'Instagram — Caption', text: '"This changed my morning routine completely. Link in bio if you want in."', meta: 'Wellness Course · 40% commission' },
   { platform: 'Email — Swipe copy', text: '"Hey [name] — I rarely send these but this one is converting at 8% and I had to share…"', meta: 'SaaS Tool · 35% recurring commission' },
-  { platform: 'YouTube — Hook', text: '"I tested this for 30 days so you don\'t have to — here\'s what actually happened."', meta: 'Fitness · 30% commission' },
-  { platform: 'Twitter/X — Thread', text: '"Quietly, one of the best affiliate programs I\'ve ever promoted. Here\'s why 🧵"', meta: 'Digital Products · 50% commission' },
+  { platform: 'YouTube — Hook', text: `"I tested this for 30 days so you don't have to — here's what actually happened."`, meta: 'Fitness · 30% commission' },
+  { platform: 'Twitter/X — Thread', text: `"Quietly, one of the best affiliate programs I've ever promoted. Here's why 🧵"`, meta: 'Digital Products · 50% commission' },
 ]
+
+const HERO_VIDEOS = ['hero1.mp4', 'hero2.mp4', 'hero3.mp4', 'hero4.mp4']
 
 export default async function HomePage() {
   const [featuredProducts, trendingProducts, recentProducts, stats, categoryCounts, loggedIn] = await Promise.all([
-    getFeaturedProducts(),
-    getTrendingProducts(),
-    getRecentProducts(),
-    getStats(),
-    getCategoryCounts(),
-    getLoggedInUser(),
+    getFeaturedProducts(), getTrendingProducts(), getRecentProducts(), getStats(), getCategoryCounts(), getLoggedInUser(),
   ])
 
   const fmt = (n: number) =>
-    n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M+`
-    : n >= 1_000   ? `$${(n / 1_000).toFixed(0)}K+`
-    : `$${n.toFixed(0)}`
+    n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M+` : n >= 1_000 ? `${(n / 1_000).toFixed(0)}K+` : `${n.toFixed(0)}`
 
   return (
     <div style={{ fontFamily: 'var(--font-dm-sans), sans-serif', background: '#faf9f7', color: '#1a1a1a', overflowX: 'hidden' }}>
@@ -125,7 +79,6 @@ export default async function HomePage() {
         .invite-banner { background: #f0ece5; border-bottom: 1px solid #e8e4de; padding: 10px 2.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
         .invite-banner-text { font-size: 12px; color: #888; letter-spacing: 0.03em; flex: 1; }
         .invite-banner-link { font-size: 12px; color: #1a1a1a; font-weight: 600; letter-spacing: 0.06em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
-
         .hero { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #e8e4de; align-items: stretch; }
         .hero-left { padding: 72px 48px 72px 2.5rem; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid #e8e4de; }
         .hero-eyebrow { font-size: 10px; letter-spacing: 0.22em; color: #b5a99a; text-transform: uppercase; margin-bottom: 20px; }
@@ -136,30 +89,77 @@ export default async function HomePage() {
         .hero-video-cell { overflow: hidden; background: #1a1a1a; aspect-ratio: 3/4; }
         .hero-video-cell video { width: 100%; height: 100%; object-fit: cover; display: block; }
         .hero-desktop-cell { display: block; }
-        .hero-mobile-overlay { display: none; overflow: hidden; }
-        .hero-mobile-overlay-inner { position: relative; overflow: visible; min-height: 200px; background: #1a1a1a; }
+        .hero-mobile-overlay { display: none; }
+
+        /* Mobile hero */
+        .mh-outer {
+          position: relative;
+          height: 85svh;
+          overflow: hidden;
+          background: #1a1a1a;
+        }
+        /* Video track — absolutely positioned, slides behind overlay */
+        .mh-track {
+          position: absolute;
+          top: 0; left: 0;
+          height: 100%;
+          display: flex;
+          will-change: transform;
+          transition: none;
+        }
+        .mh-slide {
+          flex-shrink: 0;
+          height: 100%;
+          position: relative;
+        }
+        .mh-slide video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        /* Fixed overlay — always on top, never moves */
+        .mh-gradient {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.35) 50%, rgba(0,0,0,0.05) 100%);
+          pointer-events: none;
+          z-index: 1;
+        }
+        .mh-content {
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          padding: 28px 20px 28px;
+          z-index: 2;
+          pointer-events: none;
+        }
+        .mh-eyebrow { font-size: 9px; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 10px; }
+        .mh-h1 { font-family: var(--font-cormorant), serif; font-size: 2.5rem; font-weight: 400; color: #fff; line-height: 1.08; margin-bottom: 10px; letter-spacing: -0.01em; }
+        .mh-sub { font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.65; margin-bottom: 18px; max-width: 34ch; }
+        .mh-btns { display: flex; gap: 8px; flex-wrap: wrap; pointer-events: auto; }
+        .mh-btn-primary { background: #fff; color: #1a1a1a; font-size: 10px; font-weight: 700; padding: 9px 20px; letter-spacing: 0.08em; text-decoration: none; display: inline-block; }
+        .mh-btn-ghost { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 500; padding: 9px 20px; border: 1px solid rgba(255,255,255,0.28); letter-spacing: 0.06em; text-decoration: none; display: inline-block; }
+        /* Dots */
+        .mh-dots { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 5px; z-index: 3; }
+        .mh-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.35); border: none; padding: 0; cursor: pointer; transition: background 0.2s, height 0.2s; }
+        .mh-dot.active { background: #fff; height: 14px; border-radius: 2px; }
 
         .btn-primary { background: #1a1a1a; color: #faf9f7; font-size: 11px; font-weight: 600; padding: 10px 24px; border: 1px solid #1a1a1a; cursor: pointer; letter-spacing: 0.08em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
         .btn-ghost { background: none; color: #888; font-size: 11px; font-weight: 500; padding: 10px 24px; border: 1px solid #e0dbd4; cursor: pointer; letter-spacing: 0.06em; font-family: var(--font-dm-sans), sans-serif; text-decoration: none; display: inline-block; }
-
         .stat-bar { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #e8e4de; }
         .stat-cell { padding: 28px 24px; border-right: 1px solid #e8e4de; text-align: center; background: #faf9f7; }
         .stat-cell:last-child { border-right: none; }
         .stat-val { font-family: var(--font-cormorant), serif; font-size: 2rem; font-weight: 400; color: #1a1a1a; letter-spacing: -0.02em; margin-bottom: 4px; }
         .stat-label { font-size: 10px; color: #b5a99a; letter-spacing: 0.12em; text-transform: uppercase; }
-
         .pill-row { display: flex; gap: 8px; padding: 20px 2.5rem; border-bottom: 1px solid #e8e4de; overflow-x: auto; scrollbar-width: none; background: #faf9f7; }
         .pill-row::-webkit-scrollbar { display: none; }
         .pill { font-size: 11px; color: #888; border: 1px solid #e0dbd4; padding: 6px 18px; cursor: pointer; white-space: nowrap; letter-spacing: 0.04em; background: #faf9f7; text-decoration: none; display: inline-block; }
         .pill:hover { border-color: #1a1a1a; color: #1a1a1a; }
-
         .section { padding: 52px 2.5rem; border-bottom: 1px solid #e8e4de; }
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 32px; }
         .section-title { font-family: var(--font-cormorant), serif; font-size: 1.75rem; font-weight: 400; color: #1a1a1a; letter-spacing: -0.01em; }
         .section-link { font-size: 11px; color: #b5a99a; letter-spacing: 0.08em; text-decoration: none; }
         .section-link:hover { color: #1a1a1a; }
-
-        /* Category carousel */
         .cat-carousel-wrap { position: relative; }
         .cat-carousel-track { display: flex; gap: 1px; overflow-x: auto; scrollbar-width: none; padding: 0 2.5rem; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; }
         .cat-carousel-track::-webkit-scrollbar { display: none; }
@@ -167,15 +167,11 @@ export default async function HomePage() {
         .cat-carousel-card:hover { background: #f5f2ed; }
         .cat-name { font-family: var(--font-cormorant), serif; font-size: 1.15rem; font-weight: 400; color: #1a1a1a; margin-bottom: 5px; }
         .cat-count { font-size: 11px; color: #b5a99a; letter-spacing: 0.04em; }
-
-        /* How it works */
         .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
         .how-num { font-family: var(--font-cormorant), serif; font-size: 3rem; font-weight: 400; color: #e8e4de; line-height: 1; margin-bottom: 14px; }
         .how-title { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
         .how-body { font-size: 13px; color: #888; line-height: 1.75; }
         .how-tag { display: inline-block; margin-top: 14px; font-size: 10px; color: #b5a99a; border: 1px solid #e8e4de; padding: 3px 10px; letter-spacing: 0.08em; }
-
-        /* Editorial split */
         .editorial { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #e8e4de; border-bottom: 1px solid #e8e4de; }
         .edit-pane { padding: 52px 2.5rem; }
         .edit-eyebrow { font-size: 10px; letter-spacing: 0.2em; color: #b5a99a; text-transform: uppercase; margin-bottom: 16px; }
@@ -184,8 +180,6 @@ export default async function HomePage() {
         .edit-features { display: flex; flex-direction: column; gap: 9px; margin-bottom: 26px; }
         .edit-feature { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #888; }
         .edit-dot { width: 3px; height: 3px; background: #b5a99a; border-radius: 50%; flex-shrink: 0; }
-
-        /* AI strip carousel */
         .ai-strip { background: #1a1a1a; padding: 52px 0 52px; border-bottom: 1px solid #1a1a1a; }
         .ai-strip-header { padding: 0 2.5rem; margin-bottom: 2rem; }
         .ai-eyebrow { font-size: 10px; letter-spacing: 0.2em; color: #444; text-transform: uppercase; margin-bottom: 16px; }
@@ -199,48 +193,24 @@ export default async function HomePage() {
         .ai-meta { font-size: 10px; color: #2a2a2a; }
         .ai-tag-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2.5rem; margin-top: 1.5rem; }
         .ai-tag { font-size: 11px; color: #444; border: 1px solid #2a2a2a; padding: 5px 12px; letter-spacing: 0.04em; }
-
-        /* CTA */
         .cta { padding: 80px 2.5rem; text-align: center; background: #1a1a1a; }
         .cta-eyebrow { font-size: 10px; letter-spacing: 0.22em; color: #444; text-transform: uppercase; margin-bottom: 16px; }
         .cta-h2 { font-family: var(--font-cormorant), serif; font-size: 3rem; font-weight: 400; color: #faf9f7; margin-bottom: 12px; letter-spacing: -0.01em; line-height: 1.1; }
         .cta-sub { font-size: 13px; color: #555; margin-bottom: 32px; line-height: 1.7; }
         .cta-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-
-        /* Footer */
         .footer { border-top: 1px solid #2a2a2a; background: #1a1a1a; padding: 24px 2.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
         .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
         .footer-links a { font-size: 11px; color: #444; text-decoration: none; letter-spacing: 0.04em; }
         .footer-links a:hover { color: #888; }
         .footer-copy { font-size: 11px; color: #333; }
-
-        /* Mobile overlay hero */
-        .mobile-hero-track { display: flex; will-change: transform; }
-        .mobile-hero-slide { flex-shrink: 0; width: 88%; position: relative; margin-right: 8px; }
-        .mobile-hero-slide video { width: 100%; aspect-ratio: 9/14; object-fit: cover; display: block; }
-        .mobile-hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.42) 45%, rgba(0,0,0,0.08) 100%); pointer-events: none; }
-        .mobile-hero-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 20px 22px; pointer-events: none; }
-        .mobile-hero-eyebrow { font-size: 9px; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 10px; }
-        .mobile-hero-h1 { font-family: var(--font-cormorant), serif; font-size: 2.5rem; font-weight: 400; color: #ffffff; line-height: 1.08; margin-bottom: 10px; letter-spacing: -0.01em; }
-        .mobile-hero-sub { font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.65; margin-bottom: 18px; max-width: 34ch; }
-        .mobile-hero-btns { display: flex; gap: 8px; flex-wrap: wrap; pointer-events: auto; }
-        .mobile-btn-primary { background: #ffffff; color: #1a1a1a; font-size: 10px; font-weight: 700; padding: 9px 20px; letter-spacing: 0.08em; text-decoration: none; display: inline-block; pointer-events: auto; }
-        .mobile-btn-ghost { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 500; padding: 9px 20px; border: 1px solid rgba(255,255,255,0.28); letter-spacing: 0.06em; text-decoration: none; display: inline-block; pointer-events: auto; }
-        .mobile-hero-dots { position: absolute; right: 14px; top: 50%; transform: translateY(-60%); display: flex; flex-direction: column; gap: 5px; z-index: 2; pointer-events: auto; }
-        .mobile-hero-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.35); border: none; padding: 0; cursor: pointer; transition: background 0.2s, height 0.2s; }
-        .mobile-hero-dot.active { background: #ffffff; height: 14px; border-radius: 2px; }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-          .ai-carousel-card { width: calc(45% - 1px); }
-        }
+        @media (max-width: 1024px) { .ai-carousel-card { width: calc(45% - 1px); } }
         @media (max-width: 768px) {
           .invite-banner { display: none; }
           .hero { grid-template-columns: 1fr; border-bottom: none; }
           .hero-left { display: none; }
           .hero-right { display: block !important; background: none; border-bottom: 1px solid #e8e4de; }
           .hero-desktop-cell { display: none !important; }
-          .hero-mobile-overlay { display: block !important; overflow: hidden; }
+          .hero-mobile-overlay { display: block !important; }
           .stat-bar { grid-template-columns: repeat(2, 1fr); }
           .pill-row { padding: 16px 1rem; }
           .section { padding: 36px 1.5rem; }
@@ -270,7 +240,6 @@ export default async function HomePage() {
         <Link href="/signup" className="invite-banner-link">Request your invite →</Link>
       </div>
 
-      {/* Hero */}
       <div className="hero">
         <div className="hero-left">
           <div className="hero-eyebrow">Affiliate platform · Invite Only</div>
@@ -296,25 +265,52 @@ export default async function HomePage() {
             <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
           </div>
 
+          {/* Mobile hero */}
           <div className="hero-mobile-overlay">
-            <div className="hero-mobile-overlay-inner">
-              <div id="mobile-hero-track" className="mobile-hero-track" />
-              <div id="mobile-hero-dots" className="mobile-hero-dots" />
-              <div className="mobile-hero-content">
-                <div className="mobile-hero-eyebrow">Affiliate platform · Invite only</div>
-                <h1 className="mobile-hero-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
-                <p className="mobile-hero-sub">A curated marketplace connecting vetted vendors with motivated affiliates.</p>
-                <div className="mobile-hero-btns">
-                  <Link href="/signup" className="mobile-btn-primary">Request access</Link>
-                  <Link href="/marketplace" className="mobile-btn-ghost">Browse products</Link>
+            <div className="mh-outer" id="mh-outer">
+              {/* Video track — JS controls transform */}
+              <div className="mh-track" id="mh-track">
+                {/* Clones + real slides rendered server-side so videos are in DOM immediately */}
+                {/* Clone of last */}
+                <div className="mh-slide" id="mh-clone-last">
+                  <video autoPlay muted loop playsInline><source src="/hero4.mp4" type="video/mp4" /></video>
                 </div>
+                {HERO_VIDEOS.map((src) => (
+                  <div key={src} className="mh-slide">
+                    <video autoPlay muted loop playsInline><source src={`/${src}`} type="video/mp4" /></video>
+                  </div>
+                ))}
+                {/* Clone of first */}
+                <div className="mh-slide" id="mh-clone-first">
+                  <video autoPlay muted loop playsInline><source src="/hero1.mp4" type="video/mp4" /></video>
+                </div>
+              </div>
+
+              {/* Gradient overlay — fixed, never moves */}
+              <div className="mh-gradient" />
+
+              {/* Text + buttons overlay — fixed, never moves */}
+              <div className="mh-content">
+                <div className="mh-eyebrow">Affiliate platform · Invite only</div>
+                <h1 className="mh-h1">Promote products.<br />Earn a commission<br />on sales.</h1>
+                <p className="mh-sub">A curated marketplace connecting vetted vendors with motivated affiliates.</p>
+                <div className="mh-btns">
+                  <Link href="/signup" className="mh-btn-primary">Request access</Link>
+                  <Link href="/marketplace" className="mh-btn-ghost">Browse products</Link>
+                </div>
+              </div>
+
+              {/* Dots */}
+              <div className="mh-dots" id="mh-dots">
+                {HERO_VIDEOS.map((_, i) => (
+                  <button key={i} className={`mh-dot${i === 0 ? ' active' : ''}`} data-dot={i} />
+                ))}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stat bar */}
       <div className="stat-bar">
         {[
           { val: stats.commissions > 0 ? fmt(stats.commissions) : 'Growing', label: 'Total commissions tracked' },
@@ -329,14 +325,12 @@ export default async function HomePage() {
         ))}
       </div>
 
-      {/* Category pills */}
       <div className="pill-row">
         {CATEGORIES.map(cat => (
           <Link key={cat} href={`/marketplace?category=${encodeURIComponent(cat)}`} className="pill">{cat}</Link>
         ))}
       </div>
 
-      {/* Trending products */}
       {trendingProducts.length > 0 && (
         <div className="section">
           <div className="section-head">
@@ -347,7 +341,6 @@ export default async function HomePage() {
         </div>
       )}
 
-      {/* Featured products */}
       {featuredProducts.length > 0 && (
         <div className="section">
           <div className="section-head">
@@ -358,7 +351,6 @@ export default async function HomePage() {
         </div>
       )}
 
-      {/* Browse by category — peek carousel */}
       <div className="section">
         <div className="section-head">
           <div className="section-title">Browse by category</div>
@@ -380,11 +372,8 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* How it works — stays vertical */}
       <div className="section">
-        <div className="section-head">
-          <div className="section-title">How it works</div>
-        </div>
+        <div className="section-head"><div className="section-title">How it works</div></div>
         <div className="how-grid">
           {[
             { num: '01', title: 'Vendors list their product', body: 'Submit your product, set your commission rate, and define brand rules. AI generates TikTok hooks, captions, email swipes, and scripts for every affiliate automatically.', tag: 'For vendors' },
@@ -401,7 +390,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* Recently added */}
       {recentProducts.length > 0 && (
         <div className="section">
           <div className="section-head">
@@ -412,7 +400,6 @@ export default async function HomePage() {
         </div>
       )}
 
-      {/* Vendor / Affiliate split */}
       <div className="editorial">
         <div className="edit-pane" style={{ background: '#faf9f7', borderRight: '1px solid #e8e4de' }}>
           <div className="edit-eyebrow">For affiliates</div>
@@ -438,7 +425,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* AI strip — swipeable carousel */}
       <div className="ai-strip">
         <div className="ai-strip-header">
           <div className="ai-eyebrow">AI-powered</div>
@@ -464,7 +450,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* CTA */}
       <div className="cta">
         <div className="cta-eyebrow">Get started today</div>
         <h2 className="cta-h2">Ready to grow<br />your reach?</h2>
@@ -489,197 +474,117 @@ export default async function HomePage() {
 
       <script dangerouslySetInnerHTML={{ __html: `
         (function() {
-          function initMobileHero() {
-            var track = document.getElementById('mobile-hero-track');
-            var dotsContainer = document.getElementById('mobile-hero-dots');
-            if (!track || !dotsContainer) return;
+          function init() {
+            var outer = document.getElementById('mh-outer');
+            var track = document.getElementById('mh-track');
+            if (!outer || !track) return;
 
-            var videos = ['hero1.mp4', 'hero2.mp4', 'hero3.mp4', 'hero4.mp4'];
+            var GAP = 8;
+            var N = 4; // real slides
+            var SLIDE_W = Math.round(outer.offsetWidth * 0.88);
+            var STEP = SLIDE_W + GAP;
 
-            for (var i = videos.length - 1; i > 0; i--) {
-              var j = Math.floor(Math.random() * (i + 1));
-              var tmp = videos[i]; videos[i] = videos[j]; videos[j] = tmp;
-            }
-
-            var slideCount = videos.length;
-            var allSlides = [videos[slideCount - 1]].concat(videos).concat([videos[0]]);
-
-            track.innerHTML = '';
-            allSlides.forEach(function(src) {
-              var slide = document.createElement('div');
-              slide.className = 'mobile-hero-slide';
-              var video = document.createElement('video');
-              video.autoplay = true;
-              video.muted = true;
-              video.loop = true;
-              video.playsInline = true;
-              video.setAttribute('playsinline', '');
-              video.setAttribute('muted', '');
-              var source = document.createElement('source');
-              source.src = '/' + src;
-              source.type = 'video/mp4';
-              video.appendChild(source);
-              var gradient = document.createElement('div');
-              gradient.className = 'mobile-hero-gradient';
-              slide.appendChild(video);
-              slide.appendChild(gradient);
-              track.appendChild(slide);
-              video.load();
-              var playPromise = video.play();
-              if (playPromise !== undefined) {
-                playPromise.catch(function() {
-                  video.muted = true;
-                  video.play();
-                });
-              }
+            // Set width on all slides (clones + real)
+            var slides = track.querySelectorAll('.mh-slide');
+            slides.forEach(function(s) {
+              s.style.width = SLIDE_W + 'px';
+              s.style.marginRight = GAP + 'px';
             });
 
-            dotsContainer.innerHTML = '';
-            videos.forEach(function(_, i) {
-              var btn = document.createElement('button');
-              btn.className = 'mobile-hero-dot' + (i === 0 ? ' active' : '');
-              btn.setAttribute('data-dot', String(i));
-              dotsContainer.appendChild(btn);
-            });
-            var dots = dotsContainer.querySelectorAll('.mobile-hero-dot');
-
+            // Start at index 0 (slot 1 in the track, after the last-clone)
             var current = 0;
-            var startX = 0;
-            var startY = 0;
-            var startTime = 0;
-            var dragging = false;
-            var dragDelta = 0;
-            var transitioning = false;
-            var lockAxis = null;
-            var transitionTimer = null;
-
-            function getW() {
-              var s = track.querySelector('.mobile-hero-slide');
-              return s ? s.offsetWidth + 8 : window.innerWidth;
-            }
+            var jumping = false;
 
             function setPos(idx, animate) {
-              track.style.transition = animate
-                ? 'transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94)'
-                : 'none';
-              track.style.transform = 'translateX(' + (-(idx + 1) * getW()) + 'px)';
-            }
-
-            function updateDots(idx) {
-              dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
-            }
-
-            function unlock() {
-              transitioning = false;
-              if (transitionTimer) { clearTimeout(transitionTimer); transitionTimer = null; }
-            }
-
-            function goTo(idx, animate) {
-              current = idx;
-              setPos(idx, animate !== false);
-              updateDots(((idx % slideCount) + slideCount) % slideCount);
-              if (animate) {
-                if (transitionTimer) clearTimeout(transitionTimer);
-                transitionTimer = setTimeout(function() {
-                  if (current === slideCount) { current = 0; setPos(0, false); updateDots(0); }
-                  else if (current === -1) { current = slideCount - 1; setPos(slideCount - 1, false); updateDots(slideCount - 1); }
-                  unlock();
-                }, 500);
-              }
+              track.style.transition = animate ? 'transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94)' : 'none';
+              track.style.transform = 'translateX(' + (-(idx + 1) * STEP) + 'px)';
             }
 
             setPos(0, false);
 
+            function updateDots(idx) {
+              var dots = document.querySelectorAll('.mh-dot');
+              dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
+            }
+
             track.addEventListener('transitionend', function() {
-              if (current === slideCount) { current = 0; setPos(0, false); updateDots(0); }
-              else if (current === -1) { current = slideCount - 1; setPos(slideCount - 1, false); updateDots(slideCount - 1); }
-              unlock();
-            });
+  if (current === N) { current = 0; setPos(0, false); }
+  else if (current === -1) { current = N - 1; setPos(N - 1, false); }
+  jumping = false;
+});
 
-            var wrapper = track.parentElement;
+// Safety net: if transitionend never fires, unlock after 500ms
+track.addEventListener('transitionstart', function() {
+  clearTimeout(window._mhUnlock);
+  window._mhUnlock = setTimeout(function() { jumping = false; }, 500);
+});
 
-            wrapper.addEventListener('touchstart', function(e) {
-              unlock();
-              var t = e.touches[0];
-              startX = t.clientX;
-              startY = t.clientY;
-              startTime = Date.now();
-              dragging = true;
-              dragDelta = 0;
-              lockAxis = null;
-              track.style.transition = 'none';
-            }, { passive: true });
+            function goTo(idx, animate) {
+              current = idx;
+              setPos(idx, animate);
+              updateDots(((idx % N) + N) % N);
+            }
 
-            wrapper.addEventListener('touchmove', function(e) {
-              if (!dragging) return;
-              var t = e.touches[0];
-              var dx = t.clientX - startX;
-              var dy = t.clientY - startY;
-              if (!lockAxis) {
-                if (Math.abs(dx) > Math.abs(dy) + 4) { lockAxis = 'h'; }
-                else if (Math.abs(dy) > Math.abs(dx) + 4) { lockAxis = 'v'; dragging = false; return; }
-                else { return; }
-              }
-              if (lockAxis !== 'h') return;
-              dragDelta = dx;
-              var resistance = (current === 0 && dx > 0) || (current === slideCount - 1 && dx < 0) ? 0.3 : 1;
-              track.style.transform = 'translateX(' + (-(current + 1) * getW() + dragDelta * resistance) + 'px)';
-            }, { passive: true });
-
-            wrapper.addEventListener('touchend', function() {
-              if (!dragging) return;
-              dragging = false;
-              lockAxis = null;
-              var elapsed = Date.now() - startTime;
-              var velocity = Math.abs(dragDelta) / Math.max(elapsed, 1);
-              var isFlick = velocity > 0.3 && elapsed < 350;
-              transitioning = true;
-              if (dragDelta < -40 || (isFlick && dragDelta < 0)) { goTo(current + 1, true); }
-              else if (dragDelta > 40 || (isFlick && dragDelta > 0)) { goTo(current - 1, true); }
-              else { goTo(current, true); }
-            }, { passive: true });
-
-            wrapper.addEventListener('touchcancel', function() {
-              dragging = false;
-              lockAxis = null;
-              goTo(current, true);
-            }, { passive: true });
-
-            dots.forEach(function(dot) {
+            // Dots
+            document.querySelectorAll('.mh-dot').forEach(function(dot) {
               dot.addEventListener('click', function() {
-                unlock();
-                transitioning = true;
                 goTo(parseInt(dot.getAttribute('data-dot')), true);
               });
             });
 
-            window.addEventListener('resize', function() { unlock(); setPos(current, false); });
-          }
+            // Touch
+            var startX = 0, startY = 0, startTime = 0, delta = 0, dragging = false, axis = null;
 
-          function init() { setTimeout(initMobileHero, 50); }
+            outer.addEventListener('touchstart', function(e) {
+              if (jumping) return;
+              var t = e.touches[0];
+              startX = t.clientX; startY = t.clientY;
+              startTime = Date.now();
+              delta = 0; dragging = true; axis = null;
+              track.style.transition = 'none';
+            }, { passive: true });
 
-          if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-          } else {
-            init();
-          }
-
-          window.addEventListener('pageshow', function(e) {
-            if (e.persisted) { setTimeout(initMobileHero, 80); }
-          });
-
-          document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'visible') {
-              var track = document.getElementById('mobile-hero-track');
-              if (track && track.children.length > 0) {
-                var w = track.querySelector('.mobile-hero-slide');
-                if (w) {
-                  track.style.transition = 'none';
-                  track.style.transform = 'translateX(' + (-(1) * (w.offsetWidth + 8)) + 'px)';
-                }
+            outer.addEventListener('touchmove', function(e) {
+              if (!dragging) return;
+              var t = e.touches[0];
+              var dx = t.clientX - startX;
+              var dy = t.clientY - startY;
+              if (!axis) {
+                if (Math.abs(dx) > Math.abs(dy) + 4) axis = 'h';
+                else if (Math.abs(dy) > Math.abs(dx) + 4) { axis = 'v'; dragging = false; return; }
+                else return;
               }
-            }
-          });
+              if (axis !== 'h') return;
+              delta = dx;
+              track.style.transform = 'translateX(' + (-(current + 1) * STEP + delta) + 'px)';
+            }, { passive: true });
+
+            outer.addEventListener('touchend', function() {
+              if (!dragging) return;
+              dragging = false; axis = null;
+              var elapsed = Date.now() - startTime;
+              var flick = Math.abs(delta) / Math.max(elapsed, 1) > 0.3 && elapsed < 350;
+              jumping = true;
+              if (delta < -40 || (flick && delta < 0)) goTo(current + 1, true);
+              else if (delta > 40 || (flick && delta > 0)) goTo(current - 1, true);
+              else { goTo(current, true); jumping = false; }
+            }, { passive: true });
+
+            outer.addEventListener('touchcancel', function() {
+              dragging = false; axis = null; jumping = true; goTo(current, true);
+            }, { passive: true });
+
+            window.addEventListener('resize', function() {
+              SLIDE_W = Math.round(outer.offsetWidth * 0.88);
+              STEP = SLIDE_W + GAP;
+              slides.forEach(function(s) { s.style.width = SLIDE_W + 'px'; });
+              setPos(current, false);
+            });
+          }
+
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+          else init();
+          window.addEventListener('pageshow', function(e) { if (e.persisted) init(); });
         })();
       ` }} />
     </div>
